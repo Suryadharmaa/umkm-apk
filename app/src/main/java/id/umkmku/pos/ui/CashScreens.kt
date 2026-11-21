@@ -33,6 +33,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import id.umkmku.pos.domain.CashDraft
 import id.umkmku.pos.domain.CashReceipt
+import id.umkmku.pos.domain.QrisReceipt
+import id.umkmku.pos.domain.SaleReceipt
+import id.umkmku.pos.domain.SaleSnapshot
 import id.umkmku.pos.domain.parseCashTender
 import id.umkmku.pos.domain.rupiah
 import id.umkmku.pos.feature.CashCommand
@@ -107,7 +110,17 @@ internal fun CashCheckoutScreen(
         ) { Text(if (command.busy) "Menyimpan pembayaran…" else "Catat pembayaran tunai") }
     }
 
-    command.priceReview?.let { proposed ->
+    PriceReviewDialog(draft, command.priceReview, onAcceptPrices, onDismissReview)
+}
+
+@Composable
+internal fun PriceReviewDialog(
+    draft: CashDraft,
+    proposal: CashDraft?,
+    onAcceptPrices: (CashDraft) -> Unit,
+    onDismissReview: () -> Unit,
+) {
+    proposal?.let { proposed ->
         AlertDialog(
             onDismissRequest = onDismissReview,
             title = { Text("Periksa perubahan produk") },
@@ -129,11 +142,12 @@ internal fun CashCheckoutScreen(
 }
 
 @Composable
-internal fun ReceiptScreen(receipt: CashReceipt, onHistory: () -> Unit) {
+internal fun ReceiptScreen(receipt: SaleReceipt, onHistory: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.md)) {
         item {
             Panel {
-                Text("Pembayaran tunai tercatat", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                val title = if (receipt is CashReceipt) "Pembayaran tunai tercatat" else "QRIS dikonfirmasi manual"
+                Text(title, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
                 Text(rupiah(receipt.draft.total), style = MaterialTheme.typography.displaySmall)
                 Text(formatSaleTime(receipt.paidAt))
                 Text(receipt.draft.id, style = MaterialTheme.typography.labelSmall)
@@ -148,9 +162,19 @@ internal fun ReceiptScreen(receipt: CashReceipt, onHistory: () -> Unit) {
         }
         item {
             Panel {
-                ReceiptAmount("Uang diterima", receipt.tender)
-                ReceiptAmount("Kembalian", receipt.change)
-                ReceiptAmount("Kas masuk", receipt.cashMovement)
+                when (receipt) {
+                    is CashReceipt -> {
+                        ReceiptAmount("Uang diterima", receipt.tender)
+                        ReceiptAmount("Kembalian", receipt.change)
+                        ReceiptAmount("Kas masuk", receipt.cashMovement)
+                    }
+                    is QrisReceipt -> {
+                        ReceiptAmount("QRIS belum cair", receipt.draft.total)
+                        Text("Bukti dicatat oleh kasir dari aplikasi merchant.")
+                        Text(formatSaleTime(receipt.observedAt))
+                        Text("Referensi merchant: ${receipt.reference}")
+                    }
+                }
             }
         }
         item { TextButton(onHistory, Modifier.heightIn(min = Space.touch)) { Text("Lihat riwayat") } }
@@ -166,20 +190,26 @@ private fun ReceiptAmount(label: String, value: Long) {
 }
 
 @Composable
-internal fun HistoryScreen(state: CashRead<List<CashReceipt>>, onRetry: () -> Unit, onReceipt: (String) -> Unit) {
+internal fun HistoryScreen(state: CashRead<List<SaleSnapshot>>, onRetry: () -> Unit, onSale: (SaleSnapshot) -> Unit) {
     LazyColumn(contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         if (state !is CashRead.Ready) {
             item { CashReadStatus(state, onRetry) }
         } else {
-            if (state.value.isEmpty()) item { MessagePanel("Belum ada penjualan", "Penjualan tunai yang tercatat muncul di sini.") }
-            items(state.value, key = { it.draft.id }) { receipt ->
-                Panel(Modifier.clickable { onReceipt(receipt.draft.id) }, contentPadding = Space.md) {
-                    Text(rupiah(receipt.draft.total), style = MaterialTheme.typography.titleMedium)
-                    val lines = receipt.draft.lines
+            if (state.value.isEmpty()) item { MessagePanel("Belum ada penjualan", "Pembayaran yang sedang menunggu dan yang sudah tercatat muncul di sini.") }
+            items(state.value, key = { it.draft.id }) { sale ->
+                Panel(Modifier.clickable { onSale(sale) }, contentPadding = Space.md) {
+                    Text(rupiah(sale.draft.total), style = MaterialTheme.typography.titleMedium)
+                    val lines = sale.draft.lines
                     val item = lines.first().product.name
                     val summary = if (lines.size == 1) item else "$item + ${lines.size - 1} produk"
                     Text(summary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("Tunai · ${formatSaleTime(receipt.paidAt)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val label = when (sale.receipt) {
+                        is CashReceipt -> "Tunai"
+                        is QrisReceipt -> "QRIS dikonfirmasi manual"
+                        null -> "QRIS menunggu pembayaran"
+                    }
+                    val timestamp = sale.receipt?.paidAt ?: checkNotNull(sale.pending).startedAt
+                    Text("$label · ${formatSaleTime(timestamp)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

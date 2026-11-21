@@ -22,4 +22,4 @@ jobs:
         with:
           packages: 'platforms;android-36 build-tools;36.0.0'
           log-accepted-android-sdk-licenses: false
-      - run: ./gradlew --no-daemon --info :app:assembleDebug :app:testDebugUnitTest
+      - run: ./gradlew --no-daemon --info :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest

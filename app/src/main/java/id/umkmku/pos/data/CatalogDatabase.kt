@@ -70,13 +70,15 @@ interface CatalogDao {
 @Database(
     entities = [
         ProductRow::class, CategoryRow::class, SaleRow::class, SaleLineRow::class,
-        CashPaymentRow::class, SaleJournalRow::class, SaleJournalLineRow::class,
+        PaymentRow::class, SaleJournalRow::class, SaleJournalLineRow::class,
+        QrisProfileRow::class, QrisOrderRow::class, QrisEvidenceRow::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
     abstract fun cashSaleDao(): CashSaleDao
+    abstract fun qrisDao(): QrisDao
 }

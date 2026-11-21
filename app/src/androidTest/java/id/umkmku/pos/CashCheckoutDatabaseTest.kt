@@ -47,7 +47,7 @@ class CashCheckoutDatabaseTest {
         val result = record(draft, "15000")
         assertEquals(0L, result.change)
         assertNull(cash.observeDraft().first())
-        assertEquals(result, cash.observeHistory().first().single())
+        assertEquals(result, cash.observeHistory().first().single().receipt)
         assertEquals(1L, rows("payment"))
         assertEquals(1L, rows("journal"))
     }

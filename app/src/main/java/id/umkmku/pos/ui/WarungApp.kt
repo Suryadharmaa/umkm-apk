@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -54,6 +56,9 @@ private enum class Tab(val route: String, val title: String, val icon: ImageVect
 
 private const val CART = "cart"
 private const val CASH = "cash/{id}"
+private const val QRIS = "qris/{id}"
+private const val QRIS_CONFIRM = "qris-confirm/{id}"
+private const val QRIS_PROFILE = "qris-profile"
 private const val RECEIPT = "receipt/{id}"
 private const val EDIT = "edit/{type}?id={id}"
 
@@ -80,12 +85,23 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
         }
     }
 
+    fun returnToTab(destination: Tab) {
+        nav.clearBackStack(destination.route)
+        nav.navigate(destination.route) {
+            popUpTo(nav.graph.findStartDestination().id)
+            launchSingleTop = true
+        }
+    }
+
     Scaffold(
         topBar = {
             val title = when (route) {
                 Tab.HOME.route -> null
                 CART -> "Keranjang"
                 CASH -> "Pembayaran tunai"
+                QRIS -> "Pembayaran QRIS"
+                QRIS_CONFIRM -> "Bukti pembayaran QRIS"
+                QRIS_PROFILE -> "Profil QRIS"
                 RECEIPT -> "Struk penjualan"
                 EDIT -> if (entry?.arguments?.getString("type") == "product") "Produk" else "Kategori"
                 else -> tab?.title
@@ -97,6 +113,13 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
                         if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                         }
+                    },
+                    actions = {
+                        if (tab == Tab.CATALOG) TextButton({
+                            cash.clearCommand()
+                            cash.cancelQrisImport()
+                            nav.navigate(QRIS_PROFILE)
+                        }) { Text("Profil QRIS") }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background),
                 )
@@ -157,14 +180,33 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
                             enabled = !command.busy,
                             modifier = Modifier.fillMaxWidth().padding(Space.page).heightIn(min = Space.touch),
                         ) { Text("Bayar tunai") }
+                        OutlinedButton(
+                            onClick = { cash.clearCommand(); nav.navigate("qris/${draft.id}") },
+                            enabled = !command.busy,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.page)
+                                .padding(bottom = Space.page).heightIn(min = Space.touch),
+                        ) { Text("Bayar QRIS") }
                     }
                 }
             }
             composable(Tab.HISTORY.route) {
                 val history by remember(cash) { cash.history() }.collectAsStateWithLifecycle(CashRead.Loading)
-                HistoryScreen(history, cash::retryRead) { nav.navigate("receipt/$it") }
+                HistoryScreen(history, cash::retryRead) { sale ->
+                    cash.clearCommand()
+                    val destination = if (sale.pending != null) "qris" else "receipt"
+                    nav.navigate("$destination/${sale.draft.id}")
+                }
             }
-            listOf(CASH, RECEIPT).forEach { saleRoute ->
+            composable(QRIS_PROFILE) {
+                BackHandler(enabled = command.busy) {}
+                val active by cash.activeProfile.collectAsStateWithLifecycle()
+                val preview by cash.profileImport.collectAsStateWithLifecycle()
+                QrisProfileScreen(
+                    active, preview, command, cash::retryRead, cash::previewQrisImage, cash::previewQrisPayload,
+                    cash::activateQris, { cash.cancelQrisImport(); cash.clearCommand() }, cash::deactivateQris,
+                )
+            }
+            listOf(CASH, RECEIPT, QRIS, QRIS_CONFIRM).forEach { saleRoute ->
                 composable(saleRoute) { saleEntry ->
                     BackHandler(enabled = command.busy) {}
                     val id = checkNotNull(saleEntry.arguments?.getString("id"))
@@ -173,15 +215,42 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
                     val receipt = sale?.receipt
                     when {
                         saleRead !is CashRead.Ready -> CashReadStatus(saleRead, cash::retryRead)
-                        receipt != null -> ReceiptScreen(receipt) { cash.clearCommand(); openTab(Tab.HISTORY) }
-                        sale == null || saleRoute == RECEIPT ->
+                        receipt != null -> ReceiptScreen(receipt) { cash.clearCommand(); returnToTab(Tab.HISTORY) }
+                        sale?.pending != null -> {
+                            val pending = sale.pending
+                            val profileRead by remember(cash, pending.profileId) {
+                                cash.profile(pending.profileId)
+                            }.collectAsStateWithLifecycle(CashRead.Loading)
+                            val profile = (profileRead as? CashRead.Ready)?.value
+                            when {
+                                profileRead !is CashRead.Ready -> CashReadStatus(profileRead, cash::retryRead)
+                                profile == null -> MessagePanel("Profil QRIS tidak ditemukan", "Pembayaran masih menunggu verifikasi kasir.")
+                                saleRoute == QRIS_CONFIRM -> QrisConfirmationScreen(sale.draft, profile, command) {
+                                    cash.confirmQris(id, it)
+                                }
+                                else -> QrisPendingScreen(sale.draft, profile, {
+                                    cash.clearCommand(); nav.navigate("qris-confirm/$id")
+                                }, { cash.clearCommand(); returnToTab(Tab.CASHIER) })
+                            }
+                        }
+                        sale == null || saleRoute == RECEIPT || saleRoute == QRIS_CONFIRM ->
                             MessagePanel("Penjualan tidak ditemukan", "Periksa kembali riwayat penjualan.")
                         else -> {
                             LaunchedEffect(sale.draft) { cash.reviewPrices(sale.draft) }
-                            CashCheckoutScreen(
-                                sale.draft, command, { cash.pay(sale.draft, it) },
-                                cash::acceptPrices, cash::clearCommand,
-                            )
+                            if (saleRoute == QRIS) {
+                                val active by cash.activeProfile.collectAsStateWithLifecycle()
+                                QrisStartScreen(
+                                    sale.draft, active, command, cash::retryRead,
+                                    { cash.beginQris(sale.draft, it) },
+                                    { cash.clearCommand(); cash.cancelQrisImport(); nav.navigate(QRIS_PROFILE) },
+                                    cash::acceptPrices, cash::clearCommand,
+                                )
+                            } else {
+                                CashCheckoutScreen(
+                                    sale.draft, command, { cash.pay(sale.draft, it) },
+                                    cash::acceptPrices, cash::clearCommand,
+                                )
+                            }
                         }
                     }
                 }

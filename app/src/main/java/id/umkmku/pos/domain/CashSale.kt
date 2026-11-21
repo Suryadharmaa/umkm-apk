@@ -8,12 +8,21 @@ data class CashDraft(val id: String, val lines: List<CartLine>) {
     val total: Long get() = cartTotal(lines)
 }
 
-data class CashReceipt(val draft: CashDraft, val tender: Long, val paidAt: Long) {
+sealed interface SaleReceipt {
+    val draft: CashDraft
+    val paidAt: Long
+}
+
+data class CashReceipt(
+    override val draft: CashDraft,
+    val tender: Long,
+    override val paidAt: Long,
+) : SaleReceipt {
     val change: Long get() = Math.subtractExact(tender, draft.total)
     val cashMovement: Long get() = Math.subtractExact(tender, change)
 }
 
-data class CashSale(val draft: CashDraft, val receipt: CashReceipt?)
+data class SaleSnapshot(val draft: CashDraft, val receipt: SaleReceipt?, val pending: PendingQris?)
 
 open class CashCheckoutException(message: String) : IllegalArgumentException(message)
 class PriceReviewRequired(val proposed: CashDraft) : CashCheckoutException("Harga produk berubah.")
