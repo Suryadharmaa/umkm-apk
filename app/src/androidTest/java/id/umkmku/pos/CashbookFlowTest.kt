@@ -81,10 +81,11 @@ class CashbookFlowTest {
 
         await("Saldo tercatat saat ini")
         if (capture) await("Saldo tercatat negatif. Periksa mutasi akun.")
-        compose.onNodeWithTag("cashbook").performScrollToNode(hasText("Ringkasan harian"))
-        compose.onNodeWithText("Beban operasional").assertIsDisplayed()
-        compose.onNodeWithTag("cashbook").performScrollToNode(hasText("Beban per kategori"))
-        compose.onNodeWithText("Sewa").assertIsDisplayed()
+        // Earlier checkout coverage adds rows to the daily card. Scroll to the actual values.
+        compose.onNodeWithTag("cashbook").performScrollToNode(hasText("Beban operasional"))
+        compose.onNodeWithText("Beban operasional").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("cashbook").performScrollToNode(hasText("Sewa"))
+        compose.onNodeWithText("Sewa").performScrollTo().assertIsDisplayed()
         if (capture) screenshot("ringkasan-harian")
         compose.onNodeWithTag("cashbook").performScrollToNode(hasText("Riwayat mutasi"))
         click("Riwayat mutasi")
