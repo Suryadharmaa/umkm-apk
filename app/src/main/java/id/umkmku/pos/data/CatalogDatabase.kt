@@ -1,5 +1,6 @@
 package id.umkmku.pos.data
 
+import androidx.room.AutoMigration
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
@@ -66,7 +67,16 @@ interface CatalogDao {
     suspend fun clearCategory(id: String)
 }
 
-@Database(entities = [ProductRow::class, CategoryRow::class], version = 1, exportSchema = true)
+@Database(
+    entities = [
+        ProductRow::class, CategoryRow::class, SaleRow::class, SaleLineRow::class,
+        CashPaymentRow::class, SaleJournalRow::class, SaleJournalLineRow::class,
+    ],
+    version = 2,
+    exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
+)
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
+    abstract fun cashSaleDao(): CashSaleDao
 }

@@ -55,8 +55,10 @@ fun rupiah(value: Long): String = "Rp" + NumberFormat.getIntegerInstance(
 ).format(value)
 
 data class CartLine(val product: Product, val quantity: Int) {
-    val subtotal: Long get() = product.price * quantity
+    val subtotal: Long get() = Math.multiplyExact(product.price, quantity.toLong())
 }
+
+fun cartTotal(lines: List<CartLine>): Long = lines.fold(0L) { sum, line -> Math.addExact(sum, line.subtotal) }
 
 fun cartLines(catalog: Catalog, quantities: Map<String, Int>): List<CartLine> =
     catalog.products.mapNotNull { product ->

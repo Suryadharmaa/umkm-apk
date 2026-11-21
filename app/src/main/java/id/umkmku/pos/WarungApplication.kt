@@ -11,6 +11,8 @@ import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import id.umkmku.pos.data.CatalogDatabase
+import id.umkmku.pos.data.CashSaleRepository
+import id.umkmku.pos.domain.CashPosting
 import id.umkmku.pos.data.RoomCatalogRepository
 import id.umkmku.pos.domain.CatalogRepository
 import javax.inject.Singleton
@@ -21,6 +23,8 @@ class WarungApplication : Application()
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class CatalogModule {
+    @Binds abstract fun cashPosting(implementation: CashSaleRepository): CashPosting
+
     @Binds abstract fun catalog(implementation: RoomCatalogRepository): CatalogRepository
 
     companion object {
