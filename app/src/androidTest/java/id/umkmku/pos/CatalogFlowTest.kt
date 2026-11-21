@@ -61,6 +61,8 @@ class CatalogFlowTest {
             screenshot("keranjang")
             return
         }
+        compose.onNodeWithContentDescription("Kurangi $product").performClick()
+        awaitText("Keranjang kosong")
         // Remove the exercise item and category from active catalog.
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         click("Katalog")

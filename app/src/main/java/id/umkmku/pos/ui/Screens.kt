@@ -43,6 +43,7 @@ import id.umkmku.pos.domain.Catalog
 import id.umkmku.pos.domain.Category
 import id.umkmku.pos.domain.Product
 import id.umkmku.pos.domain.cartLines
+import id.umkmku.pos.domain.cartTotal
 import id.umkmku.pos.domain.rupiah
 import id.umkmku.pos.feature.CatalogState
 
@@ -110,13 +111,15 @@ fun Cashier(
     onCart: () -> Unit,
     onCatalog: () -> Unit,
     onRetry: () -> Unit,
+    draftLines: List<CartLine>? = null,
+    quantityEnabled: Boolean = true,
 ) {
     val focus = LocalFocusManager.current
     var search by rememberSaveable { mutableStateOf("") }
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
     val catalog = (state as? CatalogState.Ready)?.catalog
     val filter = categoryId?.takeIf { id -> catalog?.categories?.any { it.id == id } == true }
-    val lines = catalog?.let { cartLines(it, quantities) }.orEmpty()
+    val lines = draftLines ?: catalog?.let { cartLines(it, quantities) }.orEmpty()
     val products = catalog?.products.orEmpty().filter {
         (filter == null || it.categoryId == filter) && it.name.contains(search.trim(), ignoreCase = true)
     }
@@ -157,7 +160,7 @@ fun Cashier(
                                 Text(product.name, style = MaterialTheme.typography.titleMedium)
                                 Text(rupiah(product.price), color = MaterialTheme.colorScheme.primary)
                             }
-                            QuantityStepper(product.name, count) { delta ->
+                            QuantityStepper(product.name, count, quantityEnabled) { delta ->
                                 focus.clearFocus()
                                 onQuantity(product.id, delta)
                             }
@@ -180,13 +183,13 @@ private fun CartBar(lines: List<CartLine>, onCart: () -> Unit) {
         ) {
             Icon(Icons.Default.ShoppingCart, null)
             Text("${lines.sumOf { it.quantity.toLong() }} item", Modifier.weight(1f).padding(start = Space.sm))
-            Text(rupiah(lines.sumOf { it.subtotal }))
+            Text(rupiah(cartTotal(lines)))
         }
     }
 }
 
 @Composable
-fun CartScreen(lines: List<CartLine>, onQuantity: (String, Int) -> Unit) {
+fun CartScreen(lines: List<CartLine>, quantityEnabled: Boolean = true, onQuantity: (String, Int) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().testTag("cart"), contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         if (lines.isEmpty()) item { MessagePanel("Keranjang kosong", "Tambahkan produk dari Kasir.") }
         items(lines, key = { it.product.id }) { line ->
@@ -195,14 +198,14 @@ fun CartScreen(lines: List<CartLine>, onQuantity: (String, Int) -> Unit) {
                 Text("${line.quantity} × ${rupiah(line.product.price)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(rupiah(line.subtotal), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    QuantityStepper(line.product.name, line.quantity) { onQuantity(line.product.id, it) }
+                    QuantityStepper(line.product.name, line.quantity, quantityEnabled) { onQuantity(line.product.id, it) }
                 }
             }
         }
         if (lines.isNotEmpty()) item {
             Panel {
                 Text("Total keranjang", style = MaterialTheme.typography.labelLarge)
-                Text(rupiah(lines.sumOf { it.subtotal }), style = MaterialTheme.typography.displaySmall)
+                Text(rupiah(cartTotal(lines)), style = MaterialTheme.typography.displaySmall)
             }
         }
     }

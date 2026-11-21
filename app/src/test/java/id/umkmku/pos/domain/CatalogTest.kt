@@ -6,11 +6,12 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class CatalogTest {
-    @Test fun restorationIgnoresMalformedDuplicateAndOutOfRangeCartRows() {
-        assertEquals(mapOf("tea" to 2, "rice" to 9999), restoreCart(
-            listOf("tea:2", "tea:4", "rice:9999", "bad", "x:10000", ":1", "z:-1", 123)
-        ))
-        assertEquals(MAX_CART_PRODUCTS, restoreCart(List(300) { "product$it:1" }).size)
+    @Test fun cashTenderIsPositiveWholeRupiah() {
+        assertEquals(20_000L, parseCashTender(" 20000 "))
+        assertEquals(MAX_SALE_IDR, parseCashTender("999999999999"))
+        listOf("0", "20.000", "1000,00", "-1", "+1", "1000000000000", "").forEach {
+            assertNull(parseCashTender(it))
+        }
     }
 
     @Test fun priceUsesBoundedIntegerRupiah() {

@@ -22,10 +22,10 @@ import id.umkmku.pos.R
 import id.umkmku.pos.domain.MAX_CART_QUANTITY
 
 @Composable
-internal fun QuantityStepper(name: String, quantity: Int, onChange: (Int) -> Unit) {
+internal fun QuantityStepper(name: String, quantity: Int, enabled: Boolean = true, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (quantity > 0) {
-            IconButton({ onChange(-1) }, Modifier.size(Space.touch)) {
+            IconButton({ onChange(-1) }, Modifier.size(Space.touch), enabled = enabled) {
                 Icon(ImageVector.vectorResource(R.drawable.ic_remove), "Kurangi $name",
                     tint = MaterialTheme.colorScheme.primary)
             }
@@ -34,7 +34,7 @@ internal fun QuantityStepper(name: String, quantity: Int, onChange: (Int) -> Uni
                 liveRegion = LiveRegionMode.Polite
             }, textAlign = TextAlign.Center, style = MaterialTheme.typography.labelLarge)
         }
-        IconButton({ onChange(1) }, Modifier.size(Space.touch), enabled = quantity < MAX_CART_QUANTITY) {
+        IconButton({ onChange(1) }, Modifier.size(Space.touch), enabled = enabled && quantity < MAX_CART_QUANTITY) {
             Icon(Icons.Default.Add, "Tambah $name",
                 tint = if (quantity < MAX_CART_QUANTITY) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
