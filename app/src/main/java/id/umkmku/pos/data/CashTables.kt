@@ -54,14 +54,14 @@ data class PaymentRow(
     indices = [Index(value = ["saleId", "kind"], unique = true)],
     foreignKeys = [ForeignKey(entity = PaymentRow::class, parentColumns = ["saleId"], childColumns = ["saleId"])],
 )
-data class SaleJournalRow(@PrimaryKey val id: String, val saleId: String, val kind: String)
+data class JournalRow(@PrimaryKey val id: String, val saleId: String?, val kind: String)
 
 @Entity(
     tableName = "journal_line",
     primaryKeys = ["journalId", "account"],
-    foreignKeys = [ForeignKey(entity = SaleJournalRow::class, parentColumns = ["id"], childColumns = ["journalId"])],
+    foreignKeys = [ForeignKey(entity = JournalRow::class, parentColumns = ["id"], childColumns = ["journalId"])],
 )
-data class SaleJournalLineRow(val journalId: String, val account: String, val signedIdr: Long)
+data class JournalLineRow(val journalId: String, val account: String, val signedIdr: Long)
 
 data class SaleRecord(
     @Embedded val sale: SaleRow,
@@ -106,6 +106,6 @@ interface CashSaleDao {
     @Update suspend fun updateLines(rows: List<SaleLineRow>)
     @Delete suspend fun deleteLine(row: SaleLineRow)
     @Insert suspend fun insertPayment(row: PaymentRow)
-    @Insert suspend fun insertJournal(row: SaleJournalRow)
-    @Insert suspend fun insertJournalLines(rows: List<SaleJournalLineRow>)
+    @Insert suspend fun insertJournal(row: JournalRow)
+    @Insert suspend fun insertJournalLines(rows: List<JournalLineRow>)
 }

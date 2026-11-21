@@ -1,5 +1,6 @@
 package id.umkmku.pos.domain
 
+import java.math.BigInteger
 import java.text.Normalizer
 import java.text.NumberFormat
 import java.util.Locale
@@ -50,7 +51,9 @@ internal fun parsePrice(value: String): Long? {
     return digits.toLongOrNull()?.takeIf { it in 1L..999_999_999L }
 }
 
-fun rupiah(value: Long): String = "Rp" + NumberFormat.getIntegerInstance(
+fun rupiah(value: Long): String = rupiah(BigInteger.valueOf(value))
+
+fun rupiah(value: BigInteger): String = "Rp" + NumberFormat.getIntegerInstance(
     Locale.forLanguageTag("id-ID")
 ).format(value)
 

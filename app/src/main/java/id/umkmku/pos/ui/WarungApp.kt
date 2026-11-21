@@ -9,10 +9,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import id.umkmku.pos.feature.CashRead
 import id.umkmku.pos.feature.CashViewModel
+import id.umkmku.pos.feature.CashbookViewModel
+import id.umkmku.pos.domain.LedgerAccount
+import java.util.UUID
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -52,6 +56,7 @@ private enum class Tab(val route: String, val title: String, val icon: ImageVect
     CASHIER("cashier", "Kasir", Icons.Default.ShoppingCart),
     CATALOG("catalog", "Katalog", Icons.AutoMirrored.Filled.List),
     HISTORY("history", "Riwayat", Icons.Default.DateRange),
+    FINANCE("finance", "Keuangan", Icons.Default.AccountBox),
 }
 
 private const val CART = "cart"
@@ -60,17 +65,21 @@ private const val QRIS = "qris/{id}"
 private const val QRIS_CONFIRM = "qris-confirm/{id}"
 private const val QRIS_PROFILE = "qris-profile"
 private const val RECEIPT = "receipt/{id}"
+private const val FINANCE_ENTRY = "finance-entry/{id}?opening={opening}"
+private const val FINANCE_HISTORY = "finance-history"
+private const val FINANCE_DETAIL = "finance-detail/{id}"
 private const val EDIT = "edit/{type}?id={id}"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
+fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookViewModel) {
     val state by model.catalog.collectAsStateWithLifecycle()
     val draftState by cash.draft.collectAsStateWithLifecycle()
     val command by cash.command.collectAsStateWithLifecycle()
     val draft = (draftState as? CashRead.Ready)?.value
     val quantities = draft?.lines.orEmpty().associate { it.product.id to it.quantity }
     val save by model.save.collectAsStateWithLifecycle()
+    val financeSave by finance.save.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: Tab.HOME.route
@@ -103,6 +112,9 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
                 QRIS_CONFIRM -> "Bukti pembayaran QRIS"
                 QRIS_PROFILE -> "Profil QRIS"
                 RECEIPT -> "Struk penjualan"
+                FINANCE_ENTRY -> "Catat mutasi"
+                FINANCE_HISTORY -> "Riwayat mutasi"
+                FINANCE_DETAIL -> "Rincian mutasi"
                 EDIT -> if (entry?.arguments?.getString("type") == "product") "Produk" else "Kategori"
                 else -> tab?.title
             }
@@ -110,7 +122,7 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy) {
+                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                         }
                     },
@@ -195,6 +207,52 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel) {
                     cash.clearCommand()
                     val destination = if (sale.pending != null) "qris" else "receipt"
                     nav.navigate("$destination/${sale.draft.id}")
+                }
+            }
+            composable(Tab.FINANCE.route) {
+                val book by finance.book.collectAsStateWithLifecycle()
+                CashbookScreen(book, finance.today, finance.zone, finance::retryRead, finance::selectDate,
+                    onNew = { opening ->
+                        finance.clearError()
+                        val id = UUID.randomUUID().toString()
+                        nav.navigate(if (opening == null) "finance-entry/$id" else "finance-entry/$id?opening=${opening.name}")
+                    },
+                    onHistory = { nav.navigate(FINANCE_HISTORY) },
+                )
+            }
+            composable(
+                FINANCE_ENTRY,
+                arguments = listOf(navArgument("opening") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { formEntry ->
+                BackHandler(enabled = financeSave.busy) {}
+                val id = checkNotNull(formEntry.arguments?.getString("id"))
+                val opening = formEntry.arguments?.getString("opening")?.let(LedgerAccount::valueOf)
+                val book by finance.book.collectAsStateWithLifecycle()
+                val existing = (book as? CashRead.Ready)?.value?.entries?.find { it.id == "movement:$id" }
+                when {
+                    book !is CashRead.Ready -> CashbookStatus(book, finance::retryRead)
+                    existing != null -> MovementDetails(existing, finance.zone) { nav.navigate("receipt/$it") }
+                    else -> CashbookForm(opening, financeSave) { form ->
+                        finance.post(id, form) { posted ->
+                            nav.navigate("finance-detail/$posted") { popUpTo(FINANCE_ENTRY) { inclusive = true } }
+                        }
+                    }
+                }
+            }
+            composable(FINANCE_HISTORY) {
+                val book by finance.book.collectAsStateWithLifecycle()
+                val snapshot = (book as? CashRead.Ready)?.value
+                if (snapshot == null) CashbookStatus(book, finance::retryRead)
+                else MovementHistory(snapshot.entries, finance.zone) { nav.navigate("finance-detail/$it") }
+            }
+            composable(FINANCE_DETAIL) { detail ->
+                val book by finance.book.collectAsStateWithLifecycle()
+                val id = detail.arguments?.getString("id")
+                val ledger = (book as? CashRead.Ready)?.value?.entries?.find { it.id == id }
+                when {
+                    book !is CashRead.Ready -> CashbookStatus(book, finance::retryRead)
+                    ledger == null -> MessagePanel("Mutasi tidak ditemukan", "Periksa kembali riwayat mutasi.")
+                    else -> MovementDetails(ledger, finance.zone) { nav.navigate("receipt/$it") }
                 }
             }
             composable(QRIS_PROFILE) {
