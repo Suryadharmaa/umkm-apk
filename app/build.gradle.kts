@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.icons)
     implementation(libs.preview)
     implementation(libs.room.runtime)
+    implementation(libs.zxing)
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)
     ksp(libs.room.compiler)

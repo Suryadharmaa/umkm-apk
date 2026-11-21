@@ -1,13 +1,19 @@
 package id.umkmku.pos.feature
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import id.umkmku.pos.data.CashSaleRepository
+import id.umkmku.pos.data.QrisCodec
+import id.umkmku.pos.data.QrisRepository
 import id.umkmku.pos.domain.CashCheckoutException
 import id.umkmku.pos.domain.CashDraft
 import id.umkmku.pos.domain.PriceReviewRequired
 import id.umkmku.pos.domain.RecordCashSale
+import id.umkmku.pos.domain.QrisAsset
+import id.umkmku.pos.domain.QrisEvidenceInput
+import id.umkmku.pos.domain.parseStaticQris
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,13 +44,21 @@ data class CashCommand(
 class CashViewModel @Inject constructor(
     private val repository: CashSaleRepository,
     private val recordCashSale: RecordCashSale,
+    private val qris: QrisRepository,
+    private val codec: QrisCodec,
 ) : ViewModel() {
     private val _command = MutableStateFlow(CashCommand())
     val command = _command.asStateFlow()
+    private val _profileImport = MutableStateFlow<QrisAsset?>(null)
+    val profileImport = _profileImport.asStateFlow()
     private val retries = MutableStateFlow(0)
     val draft = watch(repository::observeDraft)
         .stateIn(viewModelScope, SharingStarted.Eagerly, CashRead.Loading)
 
+    val activeProfile = watch(qris::activeProfile)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CashRead.Loading)
+
+    fun profile(id: String) = watch { qris.profile(id) }
     fun history() = watch(repository::observeHistory)
     fun sale(id: String) = watch { repository.observeSale(id) }
 
@@ -67,6 +81,17 @@ class CashViewModel @Inject constructor(
     fun reviewPrices(draft: CashDraft) = submit { repository.reviewPrices(draft.id) }
     fun acceptPrices(proposed: CashDraft) = submit { repository.acceptPrices(proposed) }
     fun pay(draft: CashDraft, tender: String) = submit { recordCashSale(draft, tender) }
+
+    fun previewQrisPayload(payload: String) = submit { _profileImport.value = parseStaticQris(payload) }
+    fun previewQrisImage(uri: Uri) = submit { _profileImport.value = codec.importImage(uri) }
+    fun cancelQrisImport() { _profileImport.value = null }
+    fun activateQris(asset: QrisAsset, attested: Boolean) = submit {
+        qris.activate(asset, attested)
+        cancelQrisImport()
+    }
+    fun deactivateQris() = submit { qris.deactivate() }
+    fun beginQris(draft: CashDraft, profileId: String) = submit { qris.begin(draft, profileId) }
+    fun confirmQris(id: String, evidence: QrisEvidenceInput) = submit { qris.confirm(id, evidence) }
 
     private fun submit(action: suspend () -> Unit) {
         if (_command.value.busy) return

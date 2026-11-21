@@ -6,7 +6,14 @@ import id.umkmku.pos.domain.CashCheckoutException
 import id.umkmku.pos.domain.CashDraft
 import id.umkmku.pos.domain.CashReceipt
 import id.umkmku.pos.domain.CashPosting
-import id.umkmku.pos.domain.CashSale
+import id.umkmku.pos.domain.CASH
+import id.umkmku.pos.domain.MANUALLY_CONFIRMED
+import id.umkmku.pos.domain.PENDING_QRIS
+import id.umkmku.pos.domain.PendingQris
+import id.umkmku.pos.domain.QRIS
+import id.umkmku.pos.domain.QrisReceipt
+import id.umkmku.pos.domain.SaleReceipt
+import id.umkmku.pos.domain.SaleSnapshot
 import id.umkmku.pos.domain.MAX_CART_PRODUCTS
 import id.umkmku.pos.domain.MAX_CART_QUANTITY
 import id.umkmku.pos.domain.MAX_SALE_IDR
@@ -21,9 +28,9 @@ class CashSaleRepository @Inject constructor(private val database: CatalogDataba
 
     fun observeDraft() = dao.observeDraft().map { it?.quote() }
     fun observeSale(id: String) = dao.observeSale(id).map { row ->
-        row?.let { CashSale(it.quote(), it.receipt()) }
+        row?.snapshot()
     }
-    fun observeHistory() = dao.observeHistory().map { records -> records.map { checkNotNull(it.receipt()) } }
+    fun observeHistory() = dao.observeHistory().map { records -> records.map { it.snapshot() } }
 
     suspend fun changeQuantity(productId: String, delta: Int, expectedDraftId: String? = null) {
         require(delta == -1 || delta == 1)
@@ -81,29 +88,28 @@ class CashSaleRepository @Inject constructor(private val database: CatalogDataba
         val row = dao.sale(expected.id) ?: throw CashCheckoutException("Keranjang tidak ditemukan.")
         // A persisted sale ID is the operation key. Replays must carry the original payload.
         row.receipt()?.let { previous ->
-            if (previous.tender != tender || previous.draft != expected) {
+            if (previous !is CashReceipt || previous.tender != tender || previous.draft != expected) {
                 throw CashCheckoutException("Penjualan ini sudah tercatat dengan rincian berbeda.")
             }
             return@withTransaction previous
         }
-        if (row.sale.draftSlot != 1 || row.quote() != expected) {
+        val total = validatedDraftTotal(row, expected)
+        if (tender < total) throw CashCheckoutException("Uang tunai kurang.")
+
+        val receipt = CashReceipt(expected, tender, System.currentTimeMillis())
+        dao.postPayment(PaymentRow(expected.id, "cash:${expected.id}", total, tender, receipt.paidAt), CASH)
+        check(dao.closeDraft(expected.id) == 1)
+        receipt
+    }
+
+    // Callers hold the same Room writer transaction through revalidation and posting.
+    internal suspend fun validatedDraftTotal(row: SaleRecord, expected: CashDraft): Long {
+        if (row.sale.draftSlot != 1 || row.payment != null || row.qrisOrder != null || row.quote() != expected) {
             throw CashCheckoutException("Keranjang berubah. Periksa kembali sebelum membayar.")
         }
         val current = row.copy(lines = refresh(row)).quote()
         if (current != expected) throw PriceReviewRequired(current)
-        val total = validateTotal(current)
-        if (tender < total) throw CashCheckoutException("Uang tunai kurang.")
-
-        val receipt = CashReceipt(current, tender, System.currentTimeMillis())
-        dao.insertPayment(CashPaymentRow(expected.id, "cash:${expected.id}", total, tender, receipt.paidAt))
-        val journalId = "sale:${expected.id}"
-        dao.insertJournal(SaleJournalRow(journalId, expected.id, "SALE"))
-        dao.insertJournalLines(listOf(
-            SaleJournalLineRow(journalId, "CASH", receipt.cashMovement),
-            SaleJournalLineRow(journalId, "SALES", Math.negateExact(total)),
-        ))
-        check(dao.closeDraft(expected.id) == 1)
-        receipt
+        return validateTotal(current)
     }
 
     private suspend fun requireDraft(id: String): SaleRecord =
@@ -124,12 +130,44 @@ class CashSaleRepository @Inject constructor(private val database: CatalogDataba
 private fun validateTotal(quote: CashDraft): Long = quote.total.takeIf { it in 1..MAX_SALE_IDR }
     ?: throw CashCheckoutException("Keranjang kosong atau total melebihi batas.")
 
-private fun SaleRecord.quote() = CashDraft(sale.id, lines.sortedBy { it.productId }.map {
+internal fun SaleRecord.quote() = CashDraft(sale.id, lines.sortedBy { it.productId }.map {
     CartLine(Product(it.productId, it.nameSnapshot, it.unitIdr, null), it.quantity)
 })
 
-private fun SaleRecord.receipt(): CashReceipt? = payment?.let {
+internal fun SaleRecord.receipt(): SaleReceipt? = payment?.let {
     val draft = quote()
-    check(it.totalIdr == draft.total && it.tenderIdr in it.totalIdr..MAX_SALE_IDR)
-    CashReceipt(draft, it.tenderIdr, it.paidAt)
+    check(it.totalIdr == draft.total && it.totalIdr in 1..MAX_SALE_IDR)
+    when (it.method) {
+        CASH -> {
+            check(qrisOrder == null && evidence == null)
+            val tender = checkNotNull(it.tenderIdr)
+            check(tender in it.totalIdr..MAX_SALE_IDR)
+            CashReceipt(draft, tender, it.paidAt)
+        }
+        QRIS -> {
+            check(it.tenderIdr == null && qrisOrder?.status == MANUALLY_CONFIRMED)
+            val match = checkNotNull(evidence)
+            check(match.observedIdr == it.totalIdr)
+            QrisReceipt(draft, it.paidAt, match.reference, match.observedAt)
+        }
+        else -> error("Unknown payment method")
+    }
+}
+
+private fun SaleRecord.snapshot() = SaleSnapshot(
+    quote(), receipt(), qrisOrder?.takeIf { it.status == PENDING_QRIS }?.let {
+        check(payment == null && evidence == null)
+        PendingQris(it.profileId, it.startedAt)
+    },
+)
+
+// Shared paid-only journal path. Both callers hold the writer transaction.
+internal suspend fun CashSaleDao.postPayment(payment: PaymentRow, debitAccount: String) {
+    insertPayment(payment)
+    val journalId = "sale:${payment.saleId}"
+    insertJournal(SaleJournalRow(journalId, payment.saleId, "SALE"))
+    insertJournalLines(listOf(
+        SaleJournalLineRow(journalId, debitAccount, payment.totalIdr),
+        SaleJournalLineRow(journalId, "SALES", Math.negateExact(payment.totalIdr)),
+    ))
 }

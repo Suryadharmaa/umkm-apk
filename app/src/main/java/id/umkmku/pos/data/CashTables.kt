@@ -1,5 +1,6 @@
 package id.umkmku.pos.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -39,18 +40,19 @@ data class SaleLineRow(
     indices = [Index(value = ["operationKey"], unique = true)],
     foreignKeys = [ForeignKey(entity = SaleRow::class, parentColumns = ["id"], childColumns = ["saleId"])],
 )
-data class CashPaymentRow(
+data class PaymentRow(
     @PrimaryKey val saleId: String,
     val operationKey: String,
     val totalIdr: Long,
-    val tenderIdr: Long,
+    val tenderIdr: Long?,
     val paidAt: Long,
+    @ColumnInfo(defaultValue = "'CASH'") val method: String = "CASH",
 )
 
 @Entity(
     tableName = "journal",
     indices = [Index(value = ["saleId", "kind"], unique = true)],
-    foreignKeys = [ForeignKey(entity = CashPaymentRow::class, parentColumns = ["saleId"], childColumns = ["saleId"])],
+    foreignKeys = [ForeignKey(entity = PaymentRow::class, parentColumns = ["saleId"], childColumns = ["saleId"])],
 )
 data class SaleJournalRow(@PrimaryKey val id: String, val saleId: String, val kind: String)
 
@@ -64,7 +66,9 @@ data class SaleJournalLineRow(val journalId: String, val account: String, val si
 data class SaleRecord(
     @Embedded val sale: SaleRow,
     @Relation(parentColumn = "id", entityColumn = "saleId") val lines: List<SaleLineRow>,
-    @Relation(parentColumn = "id", entityColumn = "saleId") val payment: CashPaymentRow?,
+    @Relation(parentColumn = "id", entityColumn = "saleId") val payment: PaymentRow?,
+    @Relation(parentColumn = "id", entityColumn = "saleId") val qrisOrder: QrisOrderRow?,
+    @Relation(parentColumn = "id", entityColumn = "saleId") val evidence: QrisEvidenceRow?,
 )
 
 @Dao
@@ -75,7 +79,14 @@ interface CashSaleDao {
     @Transaction @Query("SELECT * FROM sale WHERE id = :id")
     fun observeSale(id: String): Flow<SaleRecord?>
 
-    @Transaction @Query("SELECT sale.* FROM sale JOIN payment ON sale.id = payment.saleId ORDER BY payment.paidAt DESC, sale.id DESC")
+    @Transaction
+    @Query("""
+        SELECT sale.* FROM sale
+        LEFT JOIN payment ON sale.id = payment.saleId
+        LEFT JOIN qris_order ON sale.id = qris_order.saleId
+        WHERE payment.saleId IS NOT NULL OR qris_order.saleId IS NOT NULL
+        ORDER BY COALESCE(payment.paidAt, qris_order.startedAt) DESC, sale.id DESC
+    """)
     fun observeHistory(): Flow<List<SaleRecord>>
 
     @Transaction @Query("SELECT * FROM sale WHERE id = :id")
@@ -94,7 +105,7 @@ interface CashSaleDao {
     @Insert suspend fun insertLine(row: SaleLineRow)
     @Update suspend fun updateLines(rows: List<SaleLineRow>)
     @Delete suspend fun deleteLine(row: SaleLineRow)
-    @Insert suspend fun insertPayment(row: CashPaymentRow)
+    @Insert suspend fun insertPayment(row: PaymentRow)
     @Insert suspend fun insertJournal(row: SaleJournalRow)
     @Insert suspend fun insertJournalLines(rows: List<SaleJournalLineRow>)
 }
