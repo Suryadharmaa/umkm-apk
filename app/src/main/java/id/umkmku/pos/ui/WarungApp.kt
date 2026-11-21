@@ -105,7 +105,7 @@ fun WarungApp(model: CatalogViewModel) {
                 Dashboard(state, { openTab(Tab.CASHIER) }, { openTab(Tab.CATALOG) }, model::reload)
             }
             composable(Tab.CASHIER.route) {
-                Cashier(state, quantities, { model.changeQuantity(it, 1) }, { nav.navigate(CART) },
+                Cashier(state, quantities, model::changeQuantity, { nav.navigate(CART) },
                     { openTab(Tab.CATALOG) }, model::reload)
             }
             composable(Tab.CATALOG.route) {

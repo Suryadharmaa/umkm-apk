@@ -8,6 +8,9 @@ import id.umkmku.pos.domain.Catalog
 import id.umkmku.pos.domain.CatalogException
 import id.umkmku.pos.domain.CatalogRepository
 import id.umkmku.pos.domain.EditCatalog
+import id.umkmku.pos.domain.MAX_CART_PRODUCTS
+import id.umkmku.pos.domain.MAX_CART_QUANTITY
+import id.umkmku.pos.domain.restoreCart
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -34,9 +37,7 @@ class CatalogViewModel @Inject constructor(
     private val _save = MutableStateFlow(SaveState())
     val save = _save.asStateFlow()
     private val _cart = MutableStateFlow(
-        savedState.get<ArrayList<String>>("cart").orEmpty().associate {
-            it.substringBefore(':') to it.substringAfter(':').toInt()
-        }
+        restoreCart((savedState.get<Any>("cart") as? List<*>).orEmpty())
     )
     val cart = _cart.asStateFlow()
     private var readJob: Job? = null
@@ -63,7 +64,8 @@ class CatalogViewModel @Inject constructor(
 
     fun changeQuantity(id: String, delta: Int) {
         val changed = _cart.value.toMutableMap()
-        val quantity = ((changed[id] ?: 0) + delta).coerceIn(0, 9999)
+        if (id !in changed && changed.size >= MAX_CART_PRODUCTS) return
+        val quantity = ((changed[id] ?: 0) + delta).coerceIn(0, MAX_CART_QUANTITY)
         if (quantity == 0) changed.remove(id) else changed[id] = quantity
         storeCart(changed)
     }

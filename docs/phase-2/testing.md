@@ -34,3 +34,9 @@ Phase 2 exercises the catalog and reopen portion of A01 and A02, the draft/cart 
 - JUnit local suite passed 3 tests. The API 28 connected suite passed 6 tests, including both screenshot baselines.
 - Verified process restart with adb force-stop and launch. The PID changed and Kasir still showed the saved product, Rp6.000 price, and Minuman category.
 - See [full-window emulator evidence](screenshots/README.md).
+
+## Phase 2 quality gate
+
+CI builds the debug application and runs JUnit on pull requests. Locally, the debug build passed with 4 unit tests and 8 API 28 emulator tests. The compact steppers retained 48 dp touch targets and were exercised with a long product name in a 320 dp layout at 200% font size. Cart restoration now drops malformed rows and bounds its saved payload.
+
+Intentionally reviewed and refreshed the Cashier and Cart screenshots after adjusting row spacing and replacing quantity text buttons. The Dashboard baseline remained byte-for-byte identical.

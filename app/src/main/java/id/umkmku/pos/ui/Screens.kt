@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
@@ -107,7 +106,7 @@ private fun CatalogCount(count: Int, label: String, modifier: Modifier = Modifie
 fun Cashier(
     state: CatalogState,
     quantities: Map<String, Int>,
-    onAdd: (String) -> Unit,
+    onQuantity: (String, Int) -> Unit,
     onCart: () -> Unit,
     onCatalog: () -> Unit,
     onRetry: () -> Unit,
@@ -152,16 +151,15 @@ fun Cashier(
                 if (products.isEmpty()) item { MessagePanel("Produk tidak ditemukan", "Ubah kata kunci atau pilih kategori lain.") }
                 items(products, key = { it.id }) { product ->
                     val count = quantities[product.id] ?: 0
-                    Panel {
+                    Panel(contentPadding = Space.md) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                             Column(Modifier.weight(1f)) {
                                 Text(product.name, style = MaterialTheme.typography.titleMedium)
                                 Text(rupiah(product.price), color = MaterialTheme.colorScheme.primary)
-                                if (count > 0) Text("$count dipilih", style = MaterialTheme.typography.labelSmall)
                             }
-                            TextButton(onClick = { focus.clearFocus(); onAdd(product.id) }, enabled = count < 9999, modifier = Modifier.heightIn(min = Space.touch)) {
-                                Icon(Icons.Default.Add, null)
-                                Text("Tambah")
+                            QuantityStepper(product.name, count) { delta ->
+                                focus.clearFocus()
+                                onQuantity(product.id, delta)
                             }
                         }
                     }
@@ -177,7 +175,7 @@ private fun CartBar(lines: List<CartLine>, onCart: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = Space.xs) {
         Button(
             onClick = onCart,
-            modifier = Modifier.fillMaxWidth().padding(Space.page).heightIn(min = Space.touch),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.page, vertical = Space.sm).heightIn(min = Space.touch),
             shape = MaterialTheme.shapes.medium,
         ) {
             Icon(Icons.Default.ShoppingCart, null)
@@ -189,17 +187,15 @@ private fun CartBar(lines: List<CartLine>, onCart: () -> Unit) {
 
 @Composable
 fun CartScreen(lines: List<CartLine>, onQuantity: (String, Int) -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+    LazyColumn(Modifier.fillMaxSize().testTag("cart"), contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         if (lines.isEmpty()) item { MessagePanel("Keranjang kosong", "Tambahkan produk dari Kasir.") }
         items(lines, key = { it.product.id }) { line ->
-            Panel {
+            Panel(contentPadding = Space.md) {
                 Text(line.product.name, style = MaterialTheme.typography.titleMedium)
                 Text("${line.quantity} × ${rupiah(line.product.price)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(rupiah(line.subtotal), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    TextButton({ onQuantity(line.product.id, -1) }, modifier = Modifier.heightIn(min = Space.touch)) { Text("Kurangi") }
-                    TextButton({ onQuantity(line.product.id, 1) }, enabled = line.quantity < 9999,
-                        modifier = Modifier.heightIn(min = Space.touch)) { Text("Tambah") }
+                    QuantityStepper(line.product.name, line.quantity) { onQuantity(line.product.id, it) }
                 }
             }
         }
@@ -228,7 +224,7 @@ private fun DashboardPreview() {
 private fun CashierPreview() {
     WarungTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            Cashier(CatalogState.Ready(previewCatalog), mapOf("1" to 1), {}, {}, {}, {})
+            Cashier(CatalogState.Ready(previewCatalog), mapOf("1" to 1), { _, _ -> }, {}, {}, {})
         }
     }
 }

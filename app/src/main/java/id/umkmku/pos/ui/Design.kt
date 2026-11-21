@@ -85,12 +85,12 @@ fun WarungTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun Panel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun Panel(modifier: Modifier = Modifier, contentPadding: androidx.compose.ui.unit.Dp = Space.page, content: @Composable () -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-    ) { Column(Modifier.padding(Space.page), content = { content() }) }
+    ) { Column(Modifier.padding(contentPadding), content = { content() }) }
 }
 
 @Composable

@@ -2,10 +2,19 @@ package id.umkmku.pos
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.onNodeWithContentDescription
+import id.umkmku.pos.domain.CartLine
+import id.umkmku.pos.ui.CartScreen
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
@@ -54,7 +63,7 @@ class ScreenTest {
         val state = mutableStateOf<CatalogState>(CatalogState.Ready(Catalog()))
         var openedCatalog = false
         compose.setContent {
-            WarungTheme { Cashier(state.value, emptyMap(), {}, {}, { openedCatalog = true }, {}) }
+            WarungTheme { Cashier(state.value, emptyMap(), { _, _ -> }, {}, { openedCatalog = true }, {}) }
         }
         compose.onNodeWithText("Belum ada produk").assertIsDisplayed()
         compose.onNodeWithText("Kelola katalog").performClick()
@@ -81,12 +90,42 @@ class ScreenTest {
         compose.setContent {
             WarungTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Cashier(CatalogState.Ready(fixture), mapOf("tea" to 1), {}, {}, {}, {})
+                    Cashier(CatalogState.Ready(fixture), mapOf("tea" to 1), { _, _ -> }, {}, {}, {})
                 }
             }
         }
         compose.onNodeWithText("1 item").assertIsDisplayed()
         compareScreenshot("cashier")
+    }
+
+    @Test fun longNameAndStepperFit320DpAt200Percent() {
+        val product = Product("long", "Paket nasi uduk ayam goreng sambal dan lalapan untuk keluarga", 15000, null)
+        val count = mutableStateOf(1)
+        compose.setContent {
+            WarungTheme {
+                CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 2f)) {
+                    Box(Modifier.width(320.dp)) {
+                        CartScreen(listOf(CartLine(product, count.value))) { _, delta -> count.value += delta }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText(product.name).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tambah ${product.name}").performClick()
+        compose.onNodeWithContentDescription("2 item ${product.name}").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Kurangi ${product.name}").performClick()
+        compose.onNodeWithContentDescription("1 item ${product.name}").assertIsDisplayed()
+    }
+
+    @Test fun cartScreenshot() {
+        compose.setContent {
+            WarungTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    CartScreen(listOf(CartLine(fixture.products.first(), 1))) { _, _ -> }
+                }
+            }
+        }
+        compareScreenshot("cart")
     }
 
     private fun compareScreenshot(name: String) {
