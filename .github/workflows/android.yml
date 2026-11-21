@@ -21,4 +21,5 @@ jobs:
       - uses: android-actions/setup-android@v4
         with:
           packages: 'platforms;android-36 build-tools;36.0.0'
-      - run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest
+          log-accepted-android-sdk-licenses: false
+      - run: ./gradlew --no-daemon --info :app:assembleDebug :app:testDebugUnitTest
