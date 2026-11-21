@@ -33,6 +33,7 @@ CREATE UNIQUE INDEX one_qris_profile ON qris_profile(active) WHERE active = 1;
 CREATE TABLE sale (
   id TEXT PRIMARY KEY NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('DRAFT','PENDING_QRIS','PAID','CANCELLED','REVERSED')),
+  replaces_sale_id TEXT UNIQUE REFERENCES sale(id) CHECK(replaces_sale_id <> id),
   total_idr INTEGER NOT NULL CHECK(typeof(total_idr) = 'integer' AND total_idr BETWEEN 0 AND 999999999999),
   created_at INTEGER NOT NULL
 );
@@ -62,6 +63,7 @@ CREATE TABLE qris_confirmation (
   provider_namespace TEXT NOT NULL,
   merchant_account_key TEXT NOT NULL,
   reference_key TEXT NOT NULL CHECK(length(trim(reference_key)) > 0),
+  observed_amount_idr INTEGER NOT NULL CHECK(typeof(observed_amount_idr) = 'integer' AND observed_amount_idr BETWEEN 1 AND 999999999999),
   provider_paid_at INTEGER NOT NULL,
   confirmed_at INTEGER NOT NULL,
   late_match_note TEXT,
@@ -119,6 +121,7 @@ CREATE TABLE settlement_payment (
 CREATE INDEX settlement_payment_sale ON settlement_payment(sale_id);
 CREATE TABLE refund_evidence (
   journal_id TEXT PRIMARY KEY NOT NULL REFERENCES journal(id),
+  settlement_id TEXT REFERENCES settlement(journal_id),
   provider_namespace TEXT NOT NULL,
   merchant_account_key TEXT NOT NULL,
   reference_key TEXT NOT NULL CHECK(length(trim(reference_key)) > 0),

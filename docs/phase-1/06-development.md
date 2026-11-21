@@ -28,7 +28,7 @@ Use Compose Material 3 with custom tokens, screen ViewModels exposing immutable 
 | Milestone | Scope | Exit evidence |
 |---|---|---|
 | 0 | Review Phase 1, resolve financial policy and obtain authorized merchant sample and visual reference, approve original Figma frames | Approved specifications and reference manifest |
-| 1 | Scaffold and DI, tokens, Room/DataStore, navigation and catalog | Build, persistence and catalog tests |
+| 1 (Phase 2) | Scaffold and DI, tokens, Room, navigation, Beranda, Kasir and catalog. DataStore enters when persistent preferences are needed. | Build, catalog persistence, UI and screenshot tests |
 | 2 | Cart, cash, history, QRIS import, pending/resume, verification and reversal | Durable checkout tests, duplicate/race and failure evidence |
 | 3 | Cashbook, settlement, reports, CSV and protected backup/restore | Ledger reconciliation, restore and migration tests |
 | 4 | Full QA, access and device checks, visual comparison and signing | Passed test matrix, signed APK and install smoke test |
@@ -43,7 +43,7 @@ Authenticate and parse the backup into staging, run schema, foreign-key and busi
 
 | Item | Proposed decision / unresolved question |
 |---|---|
-| Reference | No screenshot supplied. Confirm approved visual source and Figma access before creating the reference frames. |
+| Reference | GoPay Merchant screenshot supplied as inspiration. Approve original UMKM-KU reference frames before the final visual release gate. |
 | Merchant QRIS | Obtain an authorized sample and verify merchant app exposes stable references and transaction times. If evidence is incomplete, leave pending. Agree on timing tolerance and exception handling after inspecting the provider. |
 | Provider payouts and refunds | Validate actual bank/fee deductions, provider reference conventions and full-allocation fit. Partial payouts, withheld adjustments and unsupported refunds may need product scope changes. |
 | Operator control | Trusted shared-device operator assumed. Confirm whether disbursements, QR replacement, refund and export need a separate owner role or PIN. |

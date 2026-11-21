@@ -19,7 +19,7 @@ First use: name the shop and confirm its time zone → add a product → add it 
 ## Financial views
 
 - Sales show gross completed sale value, full reversals in their own occurrence period, and net sales after reversals. Show cash/QRIS breakdown and pending QRIS count separately. Use the outlet time zone and half-open reporting intervals. Persist UTC timestamps and capture outlet business date at posting. Fix the outlet zone after first posting in v1.
-- The cashbook shows opening plus signed posted movements by account. Label these as recorded balances, with initial balance unknown until explicitly opened. Show unsettled QRIS as a receivable. Bank represents recorded business movements only. Flag negative balances for reconciliation.
+- The cashbook shows opening plus signed posted movements by account. Show recorded movements before opening and label the balance unknown until explicitly opened. The opening amount represents the baseline before any recorded movements and its effective date cannot follow the first recorded movement. Show unsettled QRIS as a receivable. Bank represents recorded business movements only. Flag negative balances for reconciliation.
 - Show operating expenses and settlement fees separately. Display other income and owner movements in their own lines. Exclude payouts and internal transfers from sales and income totals. Omit profit metrics because the MVP does not capture complete COGS, inventory valuation, or accruals.
 
 ## Scope and outcomes
