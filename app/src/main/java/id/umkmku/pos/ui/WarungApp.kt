@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import id.umkmku.pos.domain.SaleSnapshot
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -166,11 +167,11 @@ internal fun WarungApp(
                         TextButton({ nav.navigate(REPORT) }, Modifier.heightIn(min = Space.touch)) { Text("Laporan") }
                         TextButton({ nav.navigate(DATA_TOOLS) }, Modifier.heightIn(min = Space.touch)) { Text("Data") }
                     }
-                    if (tab == Tab.CATALOG) TextButton({
+                    if (tab == Tab.CATALOG) MerchantPill("Profil QRIS", {
                         cash.clearCommand()
                         cash.cancelQrisImport()
                         nav.navigate(QRIS_PROFILE)
-                    }, Modifier.heightIn(min = Space.touch)) { Text("Profil QRIS") }
+                    }, Modifier.padding(end = Space.sm), primary = false)
                 }
                 val splitActions = stackedActions && (tab == Tab.CATALOG || tab == Tab.FINANCE)
                 val appBar: @Composable () -> Unit = {
@@ -187,6 +188,7 @@ internal fun WarungApp(
                                         !settlementSave.busy && !correctionSave.busy && !dataState.busy,
                                 ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali") }
                             },
+                            expandedHeight = if (tab == Tab.CATALOG && !splitActions) 56.dp else TopAppBarDefaults.TopAppBarExpandedHeight,
                             actions = if (splitActions) ({}) else actions,
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                         )

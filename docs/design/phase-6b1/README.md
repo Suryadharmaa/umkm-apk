@@ -1,5 +1,7 @@
 # Phase 6B1 implementation and visual evidence
 
+This page preserves the initial captures. See the [Phase 6B1.1 visual revision](visual-revision/README.md) for the current emulator evidence and comparison.
+
 The implementation is based on [approved Phase 6A](../phase-6/README.md) at main commit `2c480326612b8c6ce0dc743a72c2a84f30335eb3` after [PR #8](https://github.com/Suryadharmaa/umkm-apk/pull/8). [Main Android checks](https://github.com/Suryadharmaa/umkm-apk/actions/runs/45024340250) succeeded, and Phase 5 was in the base.
 
 - The design primitives map approved semantic roles and type to Material 3. Phase 6B1 adopts them in the app shell, Beranda and Katalog. Existing route IDs, stack operations, tab restoration, secondary routes and existing test tags are retained.

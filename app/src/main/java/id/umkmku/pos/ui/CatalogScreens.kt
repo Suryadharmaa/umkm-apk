@@ -1,6 +1,11 @@
 package id.umkmku.pos.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -19,15 +24,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
@@ -42,11 +44,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -85,12 +93,6 @@ fun CatalogScreen(state: CatalogState, onRetry: () -> Unit, edit: (Boolean, Stri
                 if (catalog == null) {
                     item { MerchantCatalogStatus(state, onRetry) }
                 } else {
-                    item {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                            CatalogMode("Produk", showProducts, { showProducts = true }, Modifier.weight(1f))
-                            CatalogMode("Kategori", !showProducts, { showProducts = false }, Modifier.weight(1f))
-                        }
-                    }
                     if (showProducts && products.isNotEmpty()) {
                         item {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm),
@@ -101,15 +103,23 @@ fun CatalogScreen(state: CatalogState, onRetry: () -> Unit, edit: (Boolean, Stri
                                 })
                             }
                         }
-                        if (activeCategory != null) item {
-                            Text("Kategori: $activeCategory", style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     } else if (!showProducts && categories.isNotEmpty()) {
                         item { MerchantSearch(categoryQuery, "Cari kategori", { categoryQuery = it }, Modifier.fillMaxWidth()) }
                     }
+                    item {
+                        Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            CatalogMode("Produk", showProducts) { showProducts = true }
+                            CatalogMode("Kategori", !showProducts) { showProducts = false }
+                        }
+                    }
+                    if (showProducts && activeCategory != null) item {
+                        Text("Kategori: $activeCategory", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     if (compactHeight) item {
-                        MerchantAction(createLabel, create, Modifier.fillMaxWidth(), Icons.Default.Add)
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            MerchantPill(createLabel, create, icon = Icons.Default.Add)
+                        }
                     }
                     if (showProducts) {
                         when {
@@ -148,8 +158,10 @@ fun CatalogScreen(state: CatalogState, onRetry: () -> Unit, edit: (Boolean, Stri
             }
             if (catalog != null && !compactHeight) {
                 Surface(color = MaterialTheme.colorScheme.background, shadowElevation = 1.dp) {
-                    MerchantAction(createLabel, create,
-                        Modifier.fillMaxWidth().padding(horizontal = Space.page, vertical = Space.sm), Icons.Default.Add)
+                    Box(
+                        Modifier.fillMaxWidth().padding(horizontal = Space.page, vertical = Space.xs),
+                        contentAlignment = Alignment.Center,
+                    ) { MerchantPill(createLabel, create, icon = Icons.Default.Add) }
                 }
             }
         }
@@ -157,17 +169,20 @@ fun CatalogScreen(state: CatalogState, onRetry: () -> Unit, edit: (Boolean, Stri
 }
 
 @Composable
-private fun CatalogMode(label: String, selected: Boolean, onSelect: () -> Unit, modifier: Modifier) {
-    FilterChip(
-        selected, onSelect, label = { Text(label, Modifier.padding(vertical = Space.xs)) },
-        modifier = modifier.heightIn(min = Space.touch).merchantFocus(MerchantStyle.control, MaterialTheme.colorScheme.primary),
-        shape = MerchantStyle.control,
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-    )
+private fun CatalogMode(label: String, selected: Boolean, onSelect: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        Modifier.heightIn(min = Space.touch).merchantFocus(CircleShape, colors.primary)
+            .clip(CircleShape).selectable(selected, role = Role.Tab, onClick = onSelect),
+        contentAlignment = Alignment.Center,
+    ) {
+        val capsule = if (selected) Modifier.background(colors.primaryContainer, CircleShape) else Modifier
+        Text(
+            label, capsule.padding(horizontal = Space.page, vertical = Space.sm),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) colors.onPrimaryContainer else colors.primary,
+        )
+    }
 }
 
 @Composable
@@ -178,14 +193,34 @@ private fun CatalogCategoryFilter(
     val focus = LocalFocusManager.current
     val label = if (active == null) "Filter kategori" else "Filter kategori: $active"
     Box {
-        Surface(
-            color = if (active == null) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primaryContainer,
-            shape = MerchantStyle.control,
+        val colors = MaterialTheme.colorScheme
+        Box(
+            Modifier.size(Space.touch).merchantFocus(CircleShape, colors.primary)
+                .clip(CircleShape).clickable(role = Role.Button) {
+                    focus.clearFocus()
+                    open = true
+                }.semantics { contentDescription = label },
+            contentAlignment = Alignment.Center,
         ) {
-            MerchantIconButton(Icons.AutoMirrored.Filled.List, label, {
-                focus.clearFocus()
-                open = true
-            })
+            Box(
+                Modifier.size(40.dp).background(
+                    if (active == null) colors.surface else colors.primaryContainer, CircleShape,
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                val ink = colors.primary
+                val fill = if (active == null) colors.surface else colors.primaryContainer
+                Canvas(Modifier.size(20.dp)) {
+                    listOf(0.25f to 0.37f, 0.5f to 0.65f, 0.75f to 0.4f).forEach { (height, thumb) ->
+                        val y = size.height * height
+                        drawLine(ink, Offset(size.width * 0.08f, y), Offset(size.width * 0.92f, y),
+                            strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
+                        val handle = Offset(size.width * thumb, y)
+                        drawCircle(ink, radius = 2.5.dp.toPx(), center = handle)
+                        drawCircle(fill, radius = 1.25.dp.toPx(), center = handle)
+                    }
+                }
+            }
         }
         DropdownMenu(open, { open = false }) {
             DropdownMenuItem(
@@ -208,32 +243,44 @@ private fun CatalogCategoryFilter(
 
 @Composable
 private fun CatalogRow(name: String, detail: String, price: String? = null, onClick: () -> Unit) {
-    Panel(
-        Modifier.merchantFocus(MerchantStyle.panel, MaterialTheme.colorScheme.primary)
-            .clickable(onClickLabel = "Edit $name", onClick = onClick),
-        contentPadding = Space.md,
+    val colors = MaterialTheme.colorScheme
+    val shape = MerchantStyle.control
+    val monogram = name.split(' ').asSequence().mapNotNull { word -> word.firstOrNull(Char::isLetterOrDigit) }
+        .take(2).joinToString("").uppercase()
+    Surface(
+        Modifier.fillMaxWidth().merchantFocus(shape, colors.primary)
+            .clip(shape).clickable(onClickLabel = "Edit $name", role = Role.Button, onClick = onClick),
+        shape = shape,
+        color = colors.surface,
     ) {
         Row(
-            Modifier.heightIn(min = MerchantStyle.rowHeight - Space.md * 2),
+            Modifier.heightIn(min = MerchantStyle.rowHeight)
+                .padding(horizontal = Space.md, vertical = Space.sm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.md),
         ) {
             if (LocalDensity.current.fontScale < 1.6f) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant, shape = MerchantStyle.slot,
-                    modifier = Modifier.size(40.dp),
+                Box(
+                    Modifier.size(44.dp).background(colors.surfaceVariant, MerchantStyle.slot).clearAndSetSemantics {},
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Filled.List, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                    }
+                    Text(
+                        monogram,
+                        color = colors.primary, style = MaterialTheme.typography.titleMedium,
+                    )
                 }
             }
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.titleMedium)
                 if (price != null) MerchantMoney(price)
-                Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    detail,
+                    Modifier.padding(top = 2.dp).background(colors.surfaceVariant, CircleShape).padding(horizontal = Space.sm),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                )
             }
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp), tint = colors.primary)
         }
     }
 }

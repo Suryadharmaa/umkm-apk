@@ -31,6 +31,7 @@ import id.umkmku.pos.ui.Dashboard
 import id.umkmku.pos.ui.MerchantNavigation
 import id.umkmku.pos.ui.Tab
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -67,7 +68,8 @@ class MerchantRedesignTest {
         compose.onNodeWithText("Cari produk").performTextInput("TEH")
         compose.onNodeWithText(tea.name).assertIsDisplayed()
         compose.onNodeWithText(bread.name).assertIsDisplayed()
-        compose.onNodeWithContentDescription("Filter kategori").performClick()
+        compose.onNodeWithContentDescription("Filter kategori")
+            .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
         compose.onNodeWithTag("catalog-category-drink").performClick()
         compose.onNodeWithText(bread.name).assertDoesNotExist()
         compose.onNodeWithText("Cari produk").performTextInput(" x")
@@ -102,7 +104,10 @@ class MerchantRedesignTest {
         compose.onNodeWithTag("catalog-list").performScrollToIndex(2)
         compose.onNodeWithText(name).assertIsDisplayed()
         compose.onNodeWithText("Rp999.999.999").assertIsDisplayed()
-        compose.onNodeWithText("Tambah produk").assertIsDisplayed()
+        val create = compose.onNodeWithText("Tambah produk")
+        create.assertIsDisplayed().assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+        val listBottom = compose.onNodeWithTag("catalog-list").fetchSemanticsNode().boundsInRoot.bottom
+        assertTrue("Creation pill must not overlap the list", listBottom <= create.fetchSemanticsNode().boundsInRoot.top)
     }
 
     @Test fun dashboardActionsAndHistoryErrorRemainIndependent() {

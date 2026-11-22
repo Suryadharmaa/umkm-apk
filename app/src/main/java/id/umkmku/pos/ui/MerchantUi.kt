@@ -1,13 +1,18 @@
 package id.umkmku.pos.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -35,11 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -71,7 +78,6 @@ private val merchantColors = lightColorScheme(
 )
 
 internal object MerchantStyle {
-    val header = Color(0xFF143A79)
     val slot = RoundedCornerShape(8.dp)
     val control = RoundedCornerShape(12.dp)
     val panel = RoundedCornerShape(16.dp)
@@ -134,6 +140,34 @@ internal fun MerchantAction(
 }
 
 @Composable
+internal fun MerchantPill(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    primary: Boolean = true,
+) {
+    val colors = MaterialTheme.colorScheme
+    val fill = if (primary) colors.primary else colors.primaryContainer
+    val ink = if (primary) colors.onPrimary else colors.onPrimaryContainer
+    Box(
+        modifier.widthIn(min = Space.touch).heightIn(min = Space.touch)
+            .merchantFocus(CircleShape, colors.onSurface)
+            .clip(CircleShape).clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier.background(fill, CircleShape).padding(horizontal = Space.page, vertical = Space.sm),
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            icon?.let { Icon(it, null, Modifier.size(18.dp), tint = ink) }
+            Text(label, style = MaterialTheme.typography.labelLarge, color = ink)
+        }
+    }
+}
+
+@Composable
 internal fun MerchantIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(
         onClick = onClick,
@@ -153,8 +187,9 @@ internal fun MerchantSearch(value: String, label: String, onValueChange: (String
             { MerchantIconButton(Icons.Default.Close, "Hapus pencarian", { onValueChange("") }) }
         },
         singleLine = true,
-        shape = MerchantStyle.control,
+        shape = CircleShape,
         colors = OutlinedTextFieldDefaults.colors(
+            unfocusedBorderColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
         ),
