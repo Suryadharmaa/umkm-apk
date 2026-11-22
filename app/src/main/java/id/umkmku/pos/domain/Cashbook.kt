@@ -146,21 +146,31 @@ data class FinancialPeriod(
 internal fun financialPeriod(
     entries: List<LedgerEntry>, startDate: LocalDate, endDate: LocalDate, zone: ZoneId,
 ): FinancialPeriod {
-    val start = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
-    val end = endDate.atStartOfDay(zone).toInstant().toEpochMilli()
     val originals = entries.associateBy { it.id }
-    val totals = mutableMapOf<DailyTotal, BigInteger>()
-    val expenses = mutableMapOf<ExpenseCategory, BigInteger>()
-    var hasActivity = false
-    for (entry in entries) {
-        if (entry.effectiveAt !in start until end || entry.movement?.kind == MovementKind.OPENING) continue
+    val period = FinancialPeriodAccumulator(startDate, endDate, zone)
+    entries.forEach { entry -> period.add(entry, entry.correction?.let { originals.getValue(it.originalId) }) }
+    return period.result()
+}
+
+internal class FinancialPeriodAccumulator(startDate: LocalDate, endDate: LocalDate, zone: ZoneId) {
+    private val start = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
+    private val end = endDate.atStartOfDay(zone).toInstant().toEpochMilli()
+    private val balances = AccountBalances()
+    private val totals = mutableMapOf<DailyTotal, BigInteger>()
+    private val expenses = mutableMapOf<ExpenseCategory, BigInteger>()
+    private var hasActivity = false
+
+    fun add(entry: LedgerEntry, original: LedgerEntry?) {
+        if (entry.effectiveAt >= end) return
+        balances.add(entry)
+        if (entry.effectiveAt < start || entry.movement?.kind == MovementKind.OPENING) return
         hasActivity = true
         val correction = entry.correction
         if (correction?.kind == CorrectionKind.REFUND) {
             val key = if (correction.funding == LedgerAccount.CASH) DailyTotal.CASH_REFUNDS else DailyTotal.QRIS_REFUNDS
             totals.add(key, entry.amount)
         } else {
-            val source = correction?.let { originals.getValue(it.originalId) } ?: entry
+            val source = if (correction == null) entry else checkNotNull(original)
             val sign = if (correction == null) 1L else -1L
             val payout = source.payout
             if (payout == null) {
@@ -175,13 +185,18 @@ internal fun financialPeriod(
         totals.add(DailyTotal.CASH_CHANGE, entry.amountFor(LedgerAccount.CASH) ?: 0)
         totals.add(DailyTotal.BANK_CHANGE, entry.amountFor(LedgerAccount.BANK) ?: 0)
     }
-    return FinancialPeriod(totals, expenses, accountBalances(entries.filter { it.effectiveAt < end }), hasActivity)
+
+    fun result(): FinancialPeriod = FinancialPeriod(totals.toMap(), expenses.toMap(), balances.result(), hasActivity)
 }
 
-private fun accountBalances(entries: List<LedgerEntry>): List<AccountSnapshot> {
-    val openings = mutableMapOf<LedgerAccount, BigInteger>()
-    val balances = mutableMapOf<LedgerAccount, BigInteger>()
-    for (entry in entries) {
+private fun accountBalances(entries: List<LedgerEntry>): List<AccountSnapshot> =
+    AccountBalances().apply { entries.forEach(::add) }.result()
+
+private class AccountBalances {
+    private val openings = mutableMapOf<LedgerAccount, BigInteger>()
+    private val balances = mutableMapOf<LedgerAccount, BigInteger>()
+
+    fun add(entry: LedgerEntry) {
         val movement = entry.movement
         if (movement?.kind == MovementKind.OPENING) {
             openings[movement.account] = BigInteger.valueOf(movement.amount)
@@ -189,7 +204,10 @@ private fun accountBalances(entries: List<LedgerEntry>): List<AccountSnapshot> {
             for (line in entry.lines) balances.add(line.account, line.amount)
         }
     }
-    return listOf(LedgerAccount.CASH, LedgerAccount.BANK, LedgerAccount.QRIS_CLEARING).map { account ->
+
+    fun result(): List<AccountSnapshot> = listOf(
+        LedgerAccount.CASH, LedgerAccount.BANK, LedgerAccount.QRIS_CLEARING,
+    ).map { account ->
         val net = balances.getOrDefault(account, BigInteger.ZERO)
         AccountSnapshot(account, if (account.isFunding) openings[account]?.add(net) else net, net)
     }

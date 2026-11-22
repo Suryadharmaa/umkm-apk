@@ -18,6 +18,7 @@ import id.umkmku.pos.feature.CashViewModel
 import id.umkmku.pos.feature.CashbookViewModel
 import id.umkmku.pos.feature.SettlementViewModel
 import id.umkmku.pos.feature.CorrectionViewModel
+import id.umkmku.pos.feature.DataToolsViewModel
 import id.umkmku.pos.domain.LedgerAccount
 import java.util.UUID
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -75,16 +76,18 @@ private const val FINANCE_HISTORY = "finance-history"
 private const val FINANCE_DETAIL = "finance-detail/{id}"
 private const val CORRECTION = "correction/{target}/{operation}"
 private const val REPORT = "report"
+private const val DATA_TOOLS = "data-tools"
 private const val EDIT = "edit/{type}?id={id}"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WarungApp(
+internal fun WarungApp(
     model: CatalogViewModel,
     cash: CashViewModel,
     finance: CashbookViewModel,
     settlements: SettlementViewModel,
     corrections: CorrectionViewModel,
+    portability: DataToolsViewModel,
 ) {
     val state by model.catalog.collectAsStateWithLifecycle()
     val draftState by cash.draft.collectAsStateWithLifecycle()
@@ -95,6 +98,7 @@ fun WarungApp(
     val financeSave by finance.save.collectAsStateWithLifecycle()
     val settlementSave by settlements.save.collectAsStateWithLifecycle()
     val correctionSave by corrections.save.collectAsStateWithLifecycle()
+    val dataState by portability.state.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: Tab.HOME.route
@@ -139,6 +143,7 @@ fun WarungApp(
                 SETTLEMENT -> "Rincian pencairan"
                 CORRECTION -> "Koreksi transaksi"
                 REPORT -> "Laporan keuangan"
+                DATA_TOOLS -> "Kelola data"
                 EDIT -> if (entry?.arguments?.getString("type") == "product") "Produk" else "Kategori"
                 else -> tab?.title
             }
@@ -146,12 +151,15 @@ fun WarungApp(
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy && !settlementSave.busy && !correctionSave.busy) {
+                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy && !settlementSave.busy && !correctionSave.busy && !dataState.busy) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                         }
                     },
                     actions = {
-                        if (tab == Tab.FINANCE) TextButton({ nav.navigate(REPORT) }) { Text("Laporan") }
+                        if (tab == Tab.FINANCE) {
+                            TextButton({ nav.navigate(REPORT) }) { Text("Laporan") }
+                            TextButton({ nav.navigate(DATA_TOOLS) }) { Text("Data") }
+                        }
                         if (tab == Tab.CATALOG) TextButton({
                             cash.clearCommand()
                             cash.cancelQrisImport()
@@ -305,6 +313,11 @@ fun WarungApp(
                         onJournal = { nav.navigate("finance-detail/${Uri.encode(it)}") },
                     ) { nav.navigate("receipt/$it") }
                 }
+            }
+            composable(DATA_TOOLS) {
+                BackHandler(enabled = dataState.busy) {}
+                val filter by finance.exportFilter.collectAsStateWithLifecycle()
+                DataToolsScreen(portability, dataState, filter) { nav.navigate(REPORT) }
             }
             composable(REPORT) {
                 val report by finance.report.collectAsStateWithLifecycle()

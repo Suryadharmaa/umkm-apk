@@ -12,6 +12,7 @@ import id.umkmku.pos.feature.CashViewModel
 import id.umkmku.pos.feature.CashbookViewModel
 import id.umkmku.pos.feature.SettlementViewModel
 import id.umkmku.pos.feature.CorrectionViewModel
+import id.umkmku.pos.feature.DataToolsViewModel
 import id.umkmku.pos.ui.WarungApp
 import id.umkmku.pos.ui.WarungTheme
 
@@ -22,12 +23,13 @@ class MainActivity : ComponentActivity() {
     private val finance: CashbookViewModel by viewModels()
     private val settlements: SettlementViewModel by viewModels()
     private val corrections: CorrectionViewModel by viewModels()
+    private val portability: DataToolsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
-        setContent { WarungTheme { WarungApp(catalog, cash, finance, settlements, corrections) } }
+        setContent { WarungTheme { WarungApp(catalog, cash, finance, settlements, corrections, portability) } }
     }
 }
