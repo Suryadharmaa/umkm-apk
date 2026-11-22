@@ -85,6 +85,12 @@ internal fun parseStaticQris(raw: String): QrisAsset {
     return QrisAsset(payload, name, merchantId.uppercase(Locale.ROOT))
 }
 
+// The posted payout must identify the same single provider route as the pinned QR profile.
+internal fun qrisProvider(payload: String): String? = parseTlv(payload)
+    ?.filterKeys { it.toInt() in 26..50 }
+    ?.values?.mapNotNull { parseTlv(it)?.get("00")?.trim()?.uppercase(Locale.ROOT)?.takeIf(String::isNotEmpty) }
+    ?.distinct()?.singleOrNull()
+
 private fun parseTlv(value: String): Map<String, String>? {
     if (value.isEmpty() || value.length > 2048 || value.any { it !in ' '..'~' }) return null
     val fields = linkedMapOf<String, String>()

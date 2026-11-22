@@ -63,6 +63,13 @@ private fun JournalRecord.entry(): LedgerEntry {
     val postings = lines.map { LedgerLine(LedgerAccount.valueOf(it.account), it.signedIdr) }
     val saleId = journal.saleId
     val movementRow = movement
+    val payout = settlement?.posting()
+    if (payout != null) {
+        check(journal.kind == "SETTLEMENT" && saleId == null && movementRow == null)
+        check(postings.toSet() == payout.lines().toSet())
+        return LedgerEntry(journal.id, payout.effectiveAt, checkNotNull(settlement?.postedAt),
+            payout.gross, null, null, payout.lines(), payout)
+    }
     if (saleId != null) {
         val sale = checkNotNull(payment)
         check(journal.kind == "SALE" && movementRow == null && sale.saleId == saleId)
