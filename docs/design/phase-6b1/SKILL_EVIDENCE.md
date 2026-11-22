@@ -1,0 +1,15 @@
+# UI/UX Pro Max execution
+
+Phase 6B1 used the original local UI/UX Pro Max search engine from [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill). The Codex installation recorded in the [approved 6A evidence](../phase-6/SKILL_EVIDENCE.md) was present under `.agents/skills/ui-ux-pro-max`. Its `SKILL.md` and local script/data files were read before the queries. The commands below ran with Python 3.13.14 on Windows. The approved Phase 6A tokens, specs and JPEGs governed the implementation.
+
+| Executed command | Relevant result | Application in Compose |
+| --- | --- | --- |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "point of sale cashier inventory retail" --domain product` | Results included kiosk, inventory and retail/e-commerce patterns. | The reusable patterns here are direct task entry and compact scannable lists. Phase 6A supplies the actual POS hierarchy and features. |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "compact financial dashboard minimal mobile" --domain style` | Financial Dashboard emphasized readable amounts and dense, organized information. | Beranda uses an inset catalog overview and compact rows of existing sales. Amounts use exact IDR and tabular figures. |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "lazy list stable keys state restoration" --stack jetpack-compose` | Stable lazy keys and using lazy layouts for data lists. | Catalog items and recent sales use existing IDs as keys. Catalog controls use `rememberSaveable` and the route stack retains its existing save/restore behavior. |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "mobile navigation accessibility touch targets" --domain ux` | Mobile touch targets, adequate separation and navigation accessibility. | Real 48 dp destinations and icon buttons, Material selection semantics, visible text labels and focus outlines. |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "bottom navigation back state" --domain ux` | Preserve navigation history and identify the current destination. | Destination selection uses the existing top-level route IDs and navigation options. The current destination has a visible indicator and selected semantics. |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "product search filter empty states" --domain ux` and `"empty states search no results" --domain ux` | Distinguish empty content from filtered zero results and offer a recovery action. | Empty catalog offers creation. Filtered zero results offer reset. Text and category constraints operate on loaded active products. |
+| `python .agents/skills/ui-ux-pro-max/scripts/search.py "mobile responsive touch target size" --domain ux` | Keep target size and spacing while adapting to available space. | The nav measures labels and reflows into 3+2 when needed. Product titles wrap, and a short viewport puts creation in the scroll area. |
+
+The implementation adds no libraries for the design system. The skill serves as advisory evidence and the approved [design tokens](../phase-6/TOKENS.json) remain the source for the Compose roles.

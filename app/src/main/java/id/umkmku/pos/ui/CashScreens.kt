@@ -227,4 +227,4 @@ internal fun HistoryScreen(state: CashRead<List<SaleSnapshot>>, onRetry: () -> U
 
 private val saleTime = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm", Locale.forLanguageTag("id-ID"))
 
-private fun formatSaleTime(at: Long): String = saleTime.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
+internal fun formatSaleTime(at: Long): String = saleTime.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))

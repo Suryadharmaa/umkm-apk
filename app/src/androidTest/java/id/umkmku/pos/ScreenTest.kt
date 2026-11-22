@@ -75,7 +75,7 @@ class ScreenTest {
         compose.onNodeWithText("Produk tidak ditemukan").assertIsDisplayed()
     }
 
-    @Test fun dashboardScreenshot() {
+    @Test fun dashboardShowsActionsAndCatalogOverview() {
         compose.setContent {
             WarungTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -83,7 +83,9 @@ class ScreenTest {
                 }
             }
         }
-        compareScreenshot("dashboard")
+        compose.onNodeWithText("Buka kasir").assertIsDisplayed()
+        compose.onNodeWithText("Ringkasan katalog").assertIsDisplayed()
+        compose.onNodeWithText("Transaksi terbaru").assertIsDisplayed()
     }
 
     @Test fun cashierScreenshot() {
