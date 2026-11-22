@@ -165,9 +165,9 @@ private fun SaleRecord.snapshot() = SaleSnapshot(
 internal suspend fun CashSaleDao.postPayment(payment: PaymentRow, debitAccount: String) {
     insertPayment(payment)
     val journalId = "sale:${payment.saleId}"
-    insertJournal(SaleJournalRow(journalId, payment.saleId, "SALE"))
+    insertJournal(JournalRow(journalId, payment.saleId, "SALE"))
     insertJournalLines(listOf(
-        SaleJournalLineRow(journalId, debitAccount, payment.totalIdr),
-        SaleJournalLineRow(journalId, "SALES", Math.negateExact(payment.totalIdr)),
+        JournalLineRow(journalId, debitAccount, payment.totalIdr),
+        JournalLineRow(journalId, "SALES", Math.negateExact(payment.totalIdr)),
     ))
 }

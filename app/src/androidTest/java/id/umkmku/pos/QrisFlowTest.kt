@@ -2,6 +2,7 @@ package id.umkmku.pos
 
 import android.graphics.Bitmap
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -95,6 +96,12 @@ class QrisFlowTest {
         compose.onNodeWithContentDescription("Tambah $product").performClick()
         click("1 item")
         click("Bayar QRIS")
+        // The checkout does a background price review before enabling this action.
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Tampilkan QRIS").fetchSemanticsNodes().any {
+                !it.config.contains(SemanticsProperties.Disabled)
+            }
+        }
         click("Tampilkan QRIS", scroll = true)
         await("Menunggu pembayaran QRIS")
         compose.waitUntil(10_000) {

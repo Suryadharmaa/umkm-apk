@@ -1,0 +1,168 @@
+package id.umkmku.pos.domain
+
+import java.math.BigInteger
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+
+enum class LedgerAccount(val label: String) {
+    CASH("Kas tunai"), BANK("Bank"), QRIS_CLEARING("QRIS belum cair"),
+    SALES("Penjualan"), OTHER_INCOME("Pendapatan lain"),
+    OPERATING_EXPENSE("Beban operasional"), OWNER_EQUITY("Modal pemilik");
+
+    val isFunding: Boolean get() = this == CASH || this == BANK
+    fun otherFunding(): LedgerAccount = when (this) {
+        CASH -> BANK
+        BANK -> CASH
+        else -> throw CashbookException("Pilih kas tunai atau bank.")
+    }
+}
+
+enum class MovementKind(val label: String) {
+    OPENING("Saldo awal"),
+    OTHER_INCOME("Pendapatan lain"),
+    OPERATING_EXPENSE("Beban operasional"),
+    OWNER_IN("Setoran modal"),
+    OWNER_OUT("Penarikan pemilik"),
+    TRANSFER("Transfer antar akun"),
+}
+
+enum class ExpenseCategory(val label: String) {
+    SUPPLIES("Bahan dan perlengkapan"), RENT("Sewa"), UTILITIES("Utilitas"),
+    TRANSPORT("Transportasi"), LABOR("Tenaga kerja"), OTHER("Beban lainnya"),
+}
+
+data class MovementForm(
+    val kind: MovementKind,
+    val account: LedgerAccount,
+    val amount: String,
+    val category: ExpenseCategory?,
+    val note: String,
+)
+
+data class Movement(
+    val kind: MovementKind,
+    val account: LedgerAccount,
+    val amount: Long,
+    val category: ExpenseCategory?,
+    val note: String,
+)
+
+data class LedgerLine(val account: LedgerAccount, val amount: Long)
+
+data class LedgerEntry(
+    val id: String,
+    val effectiveAt: Long,
+    val recordedAt: Long,
+    val amount: Long,
+    val movement: Movement?,
+    val saleId: String?,
+    val lines: List<LedgerLine>,
+) {
+    fun amountFor(account: LedgerAccount): Long? = lines.firstOrNull { it.account == account }?.amount
+    val label: String get() = movement?.let {
+        if (it.kind == MovementKind.TRANSFER) "${it.account.label} → ${it.account.otherFunding().label}" else it.kind.label
+    } ?: if (amountFor(LedgerAccount.QRIS_CLEARING) != null) "Penjualan QRIS" else "Penjualan tunai"
+}
+
+class CashbookException(message: String) : IllegalArgumentException(message)
+
+internal fun movementAmount(raw: String, kind: MovementKind): Long? {
+    val digits = raw.trim()
+    if (digits.isEmpty() || digits.length > 12 || digits.any { it !in '0'..'9' }) return null
+    val minimum = if (kind == MovementKind.OPENING) 0L else 1L
+    return digits.toLongOrNull()?.takeIf { it in minimum..MAX_SALE_IDR }
+}
+
+internal fun MovementForm.validate(): Movement {
+    if (!account.isFunding) throw CashbookException("Pilih kas tunai atau bank.")
+    val idr = movementAmount(amount, kind)
+        ?: throw CashbookException("Masukkan nominal Rupiah yang valid tanpa titik atau koma.")
+    if ((kind == MovementKind.OPERATING_EXPENSE) != (category != null)) {
+        throw CashbookException("Pilih kategori untuk beban operasional.")
+    }
+    val description = note.trim()
+    if (description.length > 160) throw CashbookException("Catatan maksimal 160 karakter.")
+    return Movement(kind, account, idr, category, description)
+}
+
+internal fun Movement.lines(): List<LedgerLine> {
+    val (debit, credit) = when (kind) {
+        MovementKind.OPENING, MovementKind.OWNER_IN -> account to LedgerAccount.OWNER_EQUITY
+        MovementKind.OTHER_INCOME -> account to LedgerAccount.OTHER_INCOME
+        MovementKind.OPERATING_EXPENSE -> LedgerAccount.OPERATING_EXPENSE to account
+        MovementKind.OWNER_OUT -> LedgerAccount.OWNER_EQUITY to account
+        MovementKind.TRANSFER -> account.otherFunding() to account
+    }
+    return listOf(LedgerLine(debit, amount), LedgerLine(credit, Math.negateExact(amount)))
+}
+
+data class AccountSnapshot(
+    val account: LedgerAccount,
+    val recordedBalance: BigInteger?,
+    val recordedChange: BigInteger,
+)
+
+enum class DailyTotal(val label: String) {
+    CASH_SALES("Penjualan tunai"), QRIS_SALES("Penjualan QRIS"),
+    OTHER_INCOME("Pendapatan lain"), EXPENSES("Beban operasional"),
+    OWNER_IN("Setoran modal"), OWNER_OUT("Penarikan pemilik"),
+    CASH_TO_BANK("Kas tunai → Bank"), BANK_TO_CASH("Bank → Kas tunai"),
+    CASH_CHANGE("Mutasi bersih kas tunai"), BANK_CHANGE("Mutasi bersih bank"),
+}
+
+data class CashbookSnapshot(
+    val date: LocalDate,
+    val accounts: List<AccountSnapshot>,
+    val entries: List<LedgerEntry>,
+    val dailyTotals: Map<DailyTotal, BigInteger>,
+    val dailyExpenses: Map<ExpenseCategory, BigInteger>,
+    val hasDailyActivity: Boolean,
+)
+
+internal fun cashbook(entries: List<LedgerEntry>, date: LocalDate, zone: ZoneId): CashbookSnapshot {
+    val start = date.atStartOfDay(zone).toInstant()
+    val end = date.plusDays(1).atStartOfDay(zone).toInstant()
+    val openings = mutableMapOf<LedgerAccount, BigInteger>()
+    val balances = mutableMapOf<LedgerAccount, BigInteger>()
+    val totals = mutableMapOf<DailyTotal, BigInteger>()
+    val expenses = mutableMapOf<ExpenseCategory, BigInteger>()
+    var hasActivity = false
+
+    for (entry in entries) {
+        val movement = entry.movement
+        if (movement?.kind == MovementKind.OPENING) {
+            openings[movement.account] = BigInteger.valueOf(movement.amount)
+            continue
+        }
+        for (line in entry.lines) balances.add(line.account, line.amount)
+        val time = Instant.ofEpochMilli(entry.effectiveAt)
+        if (time < start || time >= end) continue
+        hasActivity = true
+        totals.add(dailyKind(entry), entry.amount)
+        totals.add(DailyTotal.CASH_CHANGE, entry.amountFor(LedgerAccount.CASH) ?: 0)
+        totals.add(DailyTotal.BANK_CHANGE, entry.amountFor(LedgerAccount.BANK) ?: 0)
+        movement?.category?.let { expenses.add(it, entry.amount) }
+    }
+
+    val accounts = listOf(LedgerAccount.CASH, LedgerAccount.BANK, LedgerAccount.QRIS_CLEARING).map { account ->
+        val net = balances.getOrDefault(account, BigInteger.ZERO)
+        val balance = if (account.isFunding) openings[account]?.add(net) else net
+        AccountSnapshot(account, balance, net)
+    }
+    return CashbookSnapshot(date, accounts, entries, totals, expenses, hasActivity)
+}
+
+private fun dailyKind(entry: LedgerEntry): DailyTotal = when (entry.movement?.kind) {
+    null -> if (entry.amountFor(LedgerAccount.CASH) != null) DailyTotal.CASH_SALES else DailyTotal.QRIS_SALES
+    MovementKind.OTHER_INCOME -> DailyTotal.OTHER_INCOME
+    MovementKind.OPERATING_EXPENSE -> DailyTotal.EXPENSES
+    MovementKind.OWNER_IN -> DailyTotal.OWNER_IN
+    MovementKind.OWNER_OUT -> DailyTotal.OWNER_OUT
+    MovementKind.TRANSFER -> if (entry.movement.account == LedgerAccount.CASH) DailyTotal.CASH_TO_BANK else DailyTotal.BANK_TO_CASH
+    MovementKind.OPENING -> error("Opening balances have no daily activity total")
+}
+
+private fun <K> MutableMap<K, BigInteger>.add(key: K, amount: Long) {
+    this[key] = getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(amount))
+}
