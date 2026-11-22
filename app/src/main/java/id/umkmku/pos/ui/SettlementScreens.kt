@@ -71,10 +71,12 @@ internal fun SettlementEditor(
     payments: List<SettlementPayment>,
     zone: ZoneId,
     save: SaveState,
+    onReverse: () -> Unit,
+    onReversal: (String) -> Unit,
     onSave: (PayoutEvidence, Set<String>, Boolean) -> Unit,
 ) {
     if (record?.state == SettlementState.POSTED) {
-        SettlementDetails(record, payments)
+        SettlementDetails(record, payments, onReverse, onReversal)
         return
     }
     var form by rememberSaveable(id) { mutableStateOf(record?.evidence ?: PayoutEvidence()) }
@@ -88,7 +90,7 @@ internal fun SettlementEditor(
         }
     }
     val focus = LocalFocusManager.current
-    val eligible = payments.filter { it.allocatedTo == null || it.saleId in selected }
+    val eligible = payments.filter { (it.allocatedTo == null && !it.refunded) || it.saleId in selected }
     val total = eligible.filter { it.saleId in selected }.fold(0L) { sum, row -> Math.addExact(sum, row.amount) }
     val enabled = !save.busy
 
@@ -130,6 +132,7 @@ internal fun SettlementEditor(
                         Text("${payment.reference} · ${rupiah(payment.amount)}", style = MaterialTheme.typography.titleMedium)
                         Text("${payment.provider ?: "Penyedia tidak jelas"} · NMID ${payment.merchantId}")
                         if (payment.allocatedTo != null) Text("Sudah dicairkan")
+                        if (payment.refunded) Text("Sudah dikembalikan")
                     }
                 }
             }
@@ -174,12 +177,14 @@ private fun PayoutField(label: String, value: String, enabled: Boolean, money: B
 }
 
 @Composable
-private fun SettlementDetails(record: SettlementRecord, payments: List<SettlementPayment>) {
+private fun SettlementDetails(
+    record: SettlementRecord, payments: List<SettlementPayment>, onReverse: () -> Unit, onReversal: (String) -> Unit,
+) {
     val posting = checkNotNull(record.posting)
     LazyColumn(contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.md)) {
         item {
             Panel {
-                Text("Pencairan tercatat", style = MaterialTheme.typography.titleMedium)
+                Text(if (record.reversalJournalId == null) "Pencairan tercatat" else "Pencairan sudah dibalik", style = MaterialTheme.typography.titleMedium)
                 Text(rupiah(posting.net), style = MaterialTheme.typography.displaySmall)
                 Text("Bruto · ${rupiah(posting.gross)}")
                 Text("Biaya aktual · ${rupiah(posting.fee)}")
@@ -194,6 +199,12 @@ private fun SettlementDetails(record: SettlementRecord, payments: List<Settlemen
                 Text("Pembayaran dialokasikan · ${record.paymentIds.size}")
             }
         }
+        item {
+            val reversal = record.reversalJournalId
+            androidx.compose.material3.TextButton(if (reversal == null) onReverse else ({ onReversal(reversal) })) {
+                Text(if (reversal == null) "Catat pembalik pencairan" else "Lihat jurnal pembalik")
+            }
+        }
         items(payments.filter { it.saleId in record.paymentIds }, key = { it.saleId }) { payment ->
             Panel {
                 Text(payment.reference)
@@ -204,4 +215,8 @@ private fun SettlementDetails(record: SettlementRecord, payments: List<Settlemen
 }
 
 private fun SettlementRecord.statusLabel() =
-    if (state == SettlementState.PENDING && reason == null) "Siap dicatat" else state.label
+    when {
+        reversalJournalId != null -> "Sudah dibalik"
+        state == SettlementState.PENDING && reason == null -> "Siap dicatat"
+        else -> state.label
+    }

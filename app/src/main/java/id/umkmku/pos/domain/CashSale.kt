@@ -22,7 +22,7 @@ data class CashReceipt(
     val cashMovement: Long get() = Math.subtractExact(tender, change)
 }
 
-data class SaleSnapshot(val draft: CashDraft, val receipt: SaleReceipt?, val pending: PendingQris?)
+data class SaleSnapshot(val draft: CashDraft, val receipt: SaleReceipt?, val pending: PendingQris?, val refundJournalId: String? = null)
 
 open class CashCheckoutException(message: String) : IllegalArgumentException(message)
 class PriceReviewRequired(val proposed: CashDraft) : CashCheckoutException("Harga produk berubah.")

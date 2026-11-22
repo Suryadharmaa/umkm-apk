@@ -46,6 +46,7 @@ data class SettlementPaymentRow(val settlementId: String, val saleId: String, va
 data class SettlementWithPayments(
     @Embedded val row: SettlementRow,
     @Relation(parentColumn = "id", entityColumn = "settlementId") val payments: List<SettlementPaymentRow>,
+    @Relation(parentColumn = "journalId", entityColumn = "originalJournalId") val reversal: CorrectionRow? = null,
 )
 
 data class PayoutCandidate(
@@ -57,12 +58,19 @@ data class PayoutCandidate(
     val merchantName: String,
     val payload: String,
     val allocatedTo: String?,
+    val refunded: Boolean,
+    val availableAt: Long,
 )
 
 private const val candidates = """
     SELECT p.saleId, p.totalIdr AS amount, evidence.observedAt, evidence.reference,
         profile.merchantId, profile.merchantName, profile.payload,
-        allocation.settlementId AS allocatedTo
+        allocation.settlementId AS allocatedTo, correction.journalId IS NOT NULL AS refunded,
+        MAX(evidence.observedAt, COALESCE((
+            SELECT MAX(reversal.effectiveAt) FROM financial_correction reversal
+            JOIN settlement_payment previous ON previous.settlementId = reversal.settlementId
+            WHERE reversal.kind = 'SETTLEMENT_REVERSAL' AND previous.saleId = p.saleId
+        ), evidence.observedAt)) AS availableAt
     FROM payment p
     JOIN qris_order q ON q.saleId = p.saleId
     JOIN qris_profile profile ON profile.id = q.profileId
@@ -70,6 +78,7 @@ private const val candidates = """
     JOIN journal j ON j.saleId = p.saleId AND j.kind = 'SALE'
     JOIN journal_line l ON l.journalId = j.id AND l.account = 'QRIS_CLEARING' AND l.signedIdr = p.totalIdr
     LEFT JOIN settlement_payment allocation ON allocation.postedSaleId = p.saleId
+    LEFT JOIN financial_correction correction ON correction.originalJournalId = j.id
     WHERE p.method = 'QRIS' AND q.status = 'MANUALLY_CONFIRMED'
         AND evidence.observedIdr = p.totalIdr AND q.totalIdr = p.totalIdr
 """

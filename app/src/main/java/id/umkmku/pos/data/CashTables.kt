@@ -69,6 +69,7 @@ data class SaleRecord(
     @Relation(parentColumn = "id", entityColumn = "saleId") val payment: PaymentRow?,
     @Relation(parentColumn = "id", entityColumn = "saleId") val qrisOrder: QrisOrderRow?,
     @Relation(parentColumn = "id", entityColumn = "saleId") val evidence: QrisEvidenceRow?,
+    @Relation(parentColumn = "id", entityColumn = "saleId") val refund: CorrectionRow?,
 )
 
 @Dao

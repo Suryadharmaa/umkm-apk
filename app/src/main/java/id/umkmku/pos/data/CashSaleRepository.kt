@@ -158,7 +158,7 @@ private fun SaleRecord.snapshot() = SaleSnapshot(
     quote(), receipt(), qrisOrder?.takeIf { it.status == PENDING_QRIS }?.let {
         check(payment == null && evidence == null)
         PendingQris(it.profileId, it.startedAt)
-    },
+    }, refund?.journalId,
 )
 
 // Shared paid-only journal path. Both callers hold the writer transaction.

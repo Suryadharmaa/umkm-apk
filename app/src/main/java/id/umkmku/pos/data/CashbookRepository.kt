@@ -4,6 +4,11 @@ import androidx.room.withTransaction
 import id.umkmku.pos.domain.CASH
 import id.umkmku.pos.domain.QRIS
 import id.umkmku.pos.domain.CashbookException
+import id.umkmku.pos.domain.CorrectionDetails
+import id.umkmku.pos.domain.CorrectionKind
+import id.umkmku.pos.domain.inverse
+import id.umkmku.pos.domain.refundLines
+import java.math.BigInteger
 import id.umkmku.pos.domain.ExpenseCategory
 import id.umkmku.pos.domain.LedgerAccount
 import id.umkmku.pos.domain.LedgerEntry
@@ -24,7 +29,12 @@ class CashbookRepository @Inject constructor(private val db: CatalogDatabase) {
     private val ledger = db.cashSaleDao()
 
     fun observeLedger() = cashbook.observeLedger().map { records ->
-        records.map { it.entry() }
+        val originals = records.filter { it.correction == null }.associate { it.journal.id to it.entry() }
+        records.map { record ->
+            val correction = record.correction
+            if (correction == null) originals.getValue(record.journal.id)
+            else record.entry(originals.getValue(correction.originalJournalId))
+        }
     }.flowOn(Dispatchers.Default)
 
     suspend fun post(operationId: String, form: MovementForm): LedgerEntry {
@@ -59,16 +69,47 @@ class CashbookRepository @Inject constructor(private val db: CatalogDatabase) {
     }
 }
 
-private fun JournalRecord.entry(): LedgerEntry {
+internal fun JournalRecord.entry(original: LedgerEntry? = null): LedgerEntry {
     val postings = lines.map { LedgerLine(LedgerAccount.valueOf(it.account), it.signedIdr) }
+    check(postings.fold(BigInteger.ZERO) { sum, line -> sum.add(BigInteger.valueOf(line.amount)) } == BigInteger.ZERO)
     val saleId = journal.saleId
+    correction?.let { row ->
+        val source = checkNotNull(original)
+        check(source.id == row.originalJournalId && source.correctedBy == journal.id)
+        val kind = CorrectionKind.valueOf(row.kind)
+        val funding = row.funding?.let(LedgerAccount::valueOf)
+        check((funding == LedgerAccount.BANK && (row.evidencedIdr ?: 0) > 0) == (row.bankReference != null))
+        when (kind) {
+            CorrectionKind.REFUND -> {
+                check(journal.kind == "REFUND" && saleId != null && saleId == source.saleId && saleId == row.saleId &&
+                    source.amount == row.evidencedIdr && funding != null)
+                val cashRefund = source.amountFor(LedgerAccount.CASH) != null
+                check(if (cashRefund) funding == LedgerAccount.CASH && row.settlementId == null
+                    else (funding == LedgerAccount.BANK && row.settlementId != null) ||
+                        (funding == LedgerAccount.QRIS_CLEARING && row.settlementId == null))
+                check(source.activeSettlementId == row.settlementId)
+                check(if (cashRefund) row.provider == null && row.merchant == null && row.reference == null
+                    else row.provider != null && row.merchant != null && row.reference != null)
+                check(postings.toSet() == refundLines(funding, source.amount).toSet())
+            }
+            CorrectionKind.MOVEMENT_REVERSAL, CorrectionKind.SETTLEMENT_REVERSAL -> {
+                check(journal.kind == "REVERSAL" && saleId == null && postings.toSet() == inverse(source.lines).toSet())
+                check(if (kind == CorrectionKind.MOVEMENT_REVERSAL) source.movement?.kind?.let { it != MovementKind.OPENING } == true
+                    else source.payout?.net == row.evidencedIdr && row.settlementId != null &&
+                        source.id == "settlement:${row.settlementId}" && funding == LedgerAccount.BANK)
+            }
+        }
+        return LedgerEntry(journal.id, row.effectiveAt, row.recordedAt, source.amount, null, saleId, postings,
+            correction = CorrectionDetails(kind, source.id, row.reason, funding, row.provider, row.merchant,
+                row.reference, row.settlementId, row.bankReference))
+    }
     val movementRow = movement
     val payout = settlement?.posting()
     if (payout != null) {
         check(journal.kind == "SETTLEMENT" && saleId == null && movementRow == null)
         check(postings.toSet() == payout.lines().toSet())
         return LedgerEntry(journal.id, payout.effectiveAt, checkNotNull(settlement?.postedAt),
-            payout.gross, null, null, payout.lines(), payout)
+            payout.gross, null, null, payout.lines(), payout, correctedBy = correctedBy?.journalId)
     }
     if (saleId != null) {
         val sale = checkNotNull(payment)
@@ -81,7 +122,8 @@ private fun JournalRecord.entry(): LedgerEntry {
         check(postings.toSet() == setOf(
             LedgerLine(debit, sale.totalIdr), LedgerLine(LedgerAccount.SALES, Math.negateExact(sale.totalIdr)),
         ))
-        return LedgerEntry(journal.id, sale.paidAt, sale.paidAt, sale.totalIdr, null, saleId, postings)
+        return LedgerEntry(journal.id, sale.paidAt, sale.paidAt, sale.totalIdr, null, saleId, postings, correctedBy = correctedBy?.journalId,
+            activeSettlementId = allocation?.settlementId)
     }
     check(payment == null && movementRow != null)
     val details = Movement(
@@ -90,5 +132,6 @@ private fun JournalRecord.entry(): LedgerEntry {
     )
     val expected = details.lines()
     check(postings.toSet() == expected.toSet())
-    return LedgerEntry(journal.id, movementRow.effectiveAt, movementRow.recordedAt, details.amount, details, null, expected)
+    return LedgerEntry(journal.id, movementRow.effectiveAt, movementRow.recordedAt, details.amount, details, null, expected,
+        correctedBy = correctedBy?.journalId)
 }

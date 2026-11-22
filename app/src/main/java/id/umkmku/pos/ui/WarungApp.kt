@@ -1,5 +1,6 @@
 package id.umkmku.pos.ui
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import id.umkmku.pos.feature.CashRead
 import id.umkmku.pos.feature.CashViewModel
 import id.umkmku.pos.feature.CashbookViewModel
 import id.umkmku.pos.feature.SettlementViewModel
+import id.umkmku.pos.feature.CorrectionViewModel
 import id.umkmku.pos.domain.LedgerAccount
 import java.util.UUID
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -71,6 +73,8 @@ private const val SETTLEMENT = "settlement/{id}"
 private const val FINANCE_ENTRY = "finance-entry/{id}?opening={opening}"
 private const val FINANCE_HISTORY = "finance-history"
 private const val FINANCE_DETAIL = "finance-detail/{id}"
+private const val CORRECTION = "correction/{target}/{operation}"
+private const val REPORT = "report"
 private const val EDIT = "edit/{type}?id={id}"
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +84,7 @@ fun WarungApp(
     cash: CashViewModel,
     finance: CashbookViewModel,
     settlements: SettlementViewModel,
+    corrections: CorrectionViewModel,
 ) {
     val state by model.catalog.collectAsStateWithLifecycle()
     val draftState by cash.draft.collectAsStateWithLifecycle()
@@ -89,6 +94,7 @@ fun WarungApp(
     val save by model.save.collectAsStateWithLifecycle()
     val financeSave by finance.save.collectAsStateWithLifecycle()
     val settlementSave by settlements.save.collectAsStateWithLifecycle()
+    val correctionSave by corrections.save.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: Tab.HOME.route
@@ -111,6 +117,11 @@ fun WarungApp(
         }
     }
 
+    fun openCorrection(target: String) {
+        corrections.clearError()
+        nav.navigate("correction/${Uri.encode(target)}/${UUID.randomUUID()}")
+    }
+
     Scaffold(
         topBar = {
             val title = when (route) {
@@ -126,6 +137,8 @@ fun WarungApp(
                 FINANCE_DETAIL -> "Rincian mutasi"
                 SETTLEMENTS -> "Pencairan QRIS"
                 SETTLEMENT -> "Rincian pencairan"
+                CORRECTION -> "Koreksi transaksi"
+                REPORT -> "Laporan keuangan"
                 EDIT -> if (entry?.arguments?.getString("type") == "product") "Produk" else "Kategori"
                 else -> tab?.title
             }
@@ -133,11 +146,12 @@ fun WarungApp(
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy && !settlementSave.busy) {
+                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy && !settlementSave.busy && !correctionSave.busy) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                         }
                     },
                     actions = {
+                        if (tab == Tab.FINANCE) TextButton({ nav.navigate(REPORT) }) { Text("Laporan") }
                         if (tab == Tab.CATALOG) TextButton({
                             cash.clearCommand()
                             cash.cancelQrisImport()
@@ -269,6 +283,8 @@ fun WarungApp(
                 if (snapshot == null) CashbookStatus(state, settlements::retryRead)
                 else SettlementEditor(
                     id, snapshot.records.find { it.id == id }, snapshot.payments, settlements.zone, settlementSave,
+                    onReverse = { openCorrection("settlement:$id") },
+                    onReversal = { nav.navigate("finance-detail/${Uri.encode(it)}") },
                 ) { evidence, selected, post -> settlements.save(id, evidence, selected, post) }
             }
             composable(FINANCE_HISTORY) {
@@ -284,7 +300,39 @@ fun WarungApp(
                 when {
                     book !is CashRead.Ready -> CashbookStatus(book, finance::retryRead)
                     ledger == null -> MessagePanel("Mutasi tidak ditemukan", "Periksa kembali riwayat mutasi.")
-                    else -> MovementDetails(ledger, finance.zone) { nav.navigate("receipt/$it") }
+                    else -> MovementDetails(ledger, finance.zone,
+                        onReverse = { openCorrection(ledger.id) },
+                        onJournal = { nav.navigate("finance-detail/${Uri.encode(it)}") },
+                    ) { nav.navigate("receipt/$it") }
+                }
+            }
+            composable(REPORT) {
+                val report by finance.report.collectAsStateWithLifecycle()
+                ReportScreen(report, finance::retryRead, finance::selectReport)
+            }
+            composable(CORRECTION) { routeEntry ->
+                BackHandler(enabled = correctionSave.busy) {}
+                val book by finance.book.collectAsStateWithLifecycle()
+                val target = checkNotNull(routeEntry.arguments?.getString("target"))
+                val operation = checkNotNull(routeEntry.arguments?.getString("operation"))
+                val ledger = (book as? CashRead.Ready)?.value?.entries?.find { it.id == target }
+                val correctedBy = ledger?.correctedBy
+                when {
+                    book !is CashRead.Ready -> CashbookStatus(book, finance::retryRead)
+                    ledger == null || !ledger.canCorrect -> MessagePanel(
+                        "Transaksi belum dapat dikoreksi", "Buka transaksi asli yang sudah tercatat.",
+                    )
+                    correctedBy != null -> Panel(Modifier.fillMaxWidth().padding(Space.page)) {
+                        Text("Koreksi sudah tercatat.")
+                        TextButton({ nav.navigate("finance-detail/${Uri.encode(correctedBy)}") }) {
+                            Text("Lihat jurnal koreksi")
+                        }
+                    }
+                    else -> CorrectionScreen(ledger, finance.zone, correctionSave) { form ->
+                        corrections.post(operation, target, form, finance.zone) { id ->
+                            nav.navigate("finance-detail/${Uri.encode(id)}") { popUpTo(CORRECTION) { inclusive = true } }
+                        }
+                    }
                 }
             }
             composable(QRIS_PROFILE) {
@@ -305,7 +353,11 @@ fun WarungApp(
                     val receipt = sale?.receipt
                     when {
                         saleRead !is CashRead.Ready -> CashReadStatus(saleRead, cash::retryRead)
-                        receipt != null -> ReceiptScreen(receipt) { cash.clearCommand(); returnToTab(Tab.HISTORY) }
+                        receipt != null -> ReceiptScreen(receipt, sale.refundJournalId != null, onRefund = {
+                            val refund = sale.refundJournalId
+                            if (refund == null) openCorrection("sale:$id")
+                            else nav.navigate("finance-detail/${Uri.encode(refund)}")
+                        }) { cash.clearCommand(); returnToTab(Tab.HISTORY) }
                         sale?.pending != null -> {
                             val pending = sale.pending
                             val profileRead by remember(cash, pending.profileId) {

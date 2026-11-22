@@ -191,7 +191,10 @@ internal fun MovementHistory(
 }
 
 @Composable
-internal fun MovementDetails(entry: LedgerEntry, zone: ZoneId, onReceipt: (String) -> Unit) {
+internal fun MovementDetails(
+    entry: LedgerEntry, zone: ZoneId, onReverse: (() -> Unit)? = null,
+    onJournal: ((String) -> Unit)? = null, onReceipt: (String) -> Unit,
+) {
     LazyColumn(contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.md)) {
         item {
             Panel {
@@ -206,6 +209,14 @@ internal fun MovementDetails(entry: LedgerEntry, zone: ZoneId, onReceipt: (Strin
                     MoneyLine("Kredit bank", rupiah(payout.net))
                     Text("Waktu pencairan · ${formatTime(payout.effectiveAt, zone)}")
                 }
+                entry.correction?.let { correction ->
+                    Text("Waktu efektif · ${formatTime(entry.effectiveAt, zone)}")
+                    Text("Alasan · ${correction.reason}")
+                    correction.reference?.let { Text("Referensi · $it") }
+                    correction.bankReference?.let { Text("Referensi mutasi bank · $it") }
+                    correction.provider?.let { Text("$it · NMID ${correction.merchant}") }
+                    correction.settlementId?.let { Text("Pencairan terkait · $it") }
+                }
                 entry.movement?.category?.let { Text("Kategori · ${it.label}") }
                 entry.movement?.note?.takeIf(String::isNotBlank)?.let { Text(it) }
             }
@@ -219,6 +230,17 @@ internal fun MovementDetails(entry: LedgerEntry, zone: ZoneId, onReceipt: (Strin
                     MoneyLine("$side · ${line.account.label}", rupiah(kotlin.math.abs(line.amount)))
                 }
             }
+        }
+        if (onJournal != null) {
+            entry.correction?.let { correction ->
+                item { TextButton({ onJournal(correction.originalId) }) { Text("Lihat jurnal asli") } }
+            }
+            entry.correctedBy?.let { id ->
+                item { TextButton({ onJournal(id) }) { Text("Lihat jurnal koreksi") } }
+            }
+        }
+        if (onReverse != null && entry.canCorrect && entry.correctedBy == null && entry.saleId == null) {
+            item { TextButton(onReverse) { Text("Catat pembalik") } }
         }
         entry.saleId?.let { id ->
             item { TextButton({ onReceipt(id) }) { Text("Lihat struk penjualan") } }
@@ -310,12 +332,12 @@ internal fun CashbookStatus(state: CashRead<*>, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SectionTitle(title: String) {
+internal fun SectionTitle(title: String) {
     Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
 }
 
 @Composable
-private fun MoneyLine(label: String, value: String) {
+internal fun MoneyLine(label: String, value: String) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = Space.xs),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
