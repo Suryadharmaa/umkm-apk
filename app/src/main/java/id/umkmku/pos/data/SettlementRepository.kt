@@ -74,9 +74,9 @@ internal fun SettlementRow.posting(): PayoutPosting? = effectiveAt?.let {
 
 private fun SettlementWithPayments.record() = SettlementRecord(
     row.id, row.evidence, payments.mapTo(mutableSetOf()) { it.saleId }, SettlementState.valueOf(row.state),
-    row.reason, row.updatedAt, row.postedAt, row.posting(),
+    row.reason, row.updatedAt, row.postedAt, row.posting(), reversal?.journalId,
 )
 
 private fun PayoutCandidate.payment() = SettlementPayment(
-    saleId, amount, observedAt, reference, merchantId, merchantName, qrisProvider(payload), allocatedTo,
+    saleId, amount, observedAt, reference, merchantId, merchantName, qrisProvider(payload), allocatedTo, refunded, availableAt,
 )

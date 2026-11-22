@@ -38,6 +38,8 @@ data class SettlementPayment(
     val merchantName: String,
     val provider: String?,
     val allocatedTo: String?,
+    val refunded: Boolean = false,
+    val availableAt: Long = observedAt,
 )
 
 data class SettlementRecord(
@@ -49,6 +51,7 @@ data class SettlementRecord(
     val updatedAt: Long,
     val postedAt: Long?,
     val posting: PayoutPosting?,
+    val reversalJournalId: String? = null,
 )
 
 data class PayoutPosting(val gross: Long, val fee: Long, val net: Long, val effectiveAt: Long) {
@@ -75,6 +78,7 @@ internal fun assessPayout(
     fun pending(message: String) = PayoutAssessment(SettlementState.PENDING, message)
     fun unresolved(message: String) = PayoutAssessment(SettlementState.UNRESOLVED, message)
     if (payments.isEmpty()) return pending("Pilih pembayaran QRIS yang sudah dikonfirmasi.")
+    if (payments.any { it.refunded }) return unresolved("Pembayaran yang dipilih sudah dikembalikan.")
     if (payments.any { it.allocatedTo != null }) return unresolved("Pembayaran yang dipilih sudah dicairkan.")
     if (evidence.provider.isBlank() || evidence.merchantId.isBlank() || evidence.reference.isBlank()) {
         return pending("Lengkapi penyedia, NMID dan referensi pencairan dari laporan penyedia.")
@@ -104,7 +108,7 @@ internal fun assessPayout(
     } catch (_: Exception) {
         return unresolved("Waktu pencairan harus memakai format TTTT-BB-HH JJ:MM.")
     }
-    if (at / 60_000 > now / 60_000 || payments.any { it.observedAt / 60_000 > at / 60_000 }) {
+    if (at / 60_000 > now / 60_000 || payments.any { it.availableAt / 60_000 > at / 60_000 }) {
         return unresolved("Waktu pencairan berada di luar rentang bukti pembayaran.")
     }
     if (openingAt != null && at < openingAt) {

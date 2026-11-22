@@ -142,13 +142,16 @@ internal fun PriceReviewDialog(
 }
 
 @Composable
-internal fun ReceiptScreen(receipt: SaleReceipt, onHistory: () -> Unit) {
+internal fun ReceiptScreen(
+    receipt: SaleReceipt, refunded: Boolean = false, onRefund: (() -> Unit)? = null, onHistory: () -> Unit,
+) {
     LazyColumn(contentPadding = PaddingValues(Space.page), verticalArrangement = Arrangement.spacedBy(Space.md)) {
         item {
             Panel {
                 val title = if (receipt is CashReceipt) "Pembayaran tunai tercatat" else "QRIS dikonfirmasi manual"
                 Text(title, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
                 Text(rupiah(receipt.draft.total), style = MaterialTheme.typography.displaySmall)
+                if (refunded) Text("Sudah dikembalikan penuh", style = MaterialTheme.typography.titleMedium)
                 Text(formatSaleTime(receipt.paidAt))
                 Text(receipt.draft.id, style = MaterialTheme.typography.labelSmall)
             }
@@ -169,12 +172,17 @@ internal fun ReceiptScreen(receipt: SaleReceipt, onHistory: () -> Unit) {
                         ReceiptAmount("Kas masuk", receipt.cashMovement)
                     }
                     is QrisReceipt -> {
-                        ReceiptAmount("QRIS belum cair", receipt.draft.total)
+                        ReceiptAmount("QRIS diterima", receipt.draft.total)
                         Text("Bukti dicatat oleh kasir dari aplikasi merchant.")
                         Text(formatSaleTime(receipt.observedAt))
                         Text("Referensi merchant: ${receipt.reference}")
                     }
                 }
+            }
+        }
+        if (onRefund != null) item {
+            TextButton(onRefund, Modifier.heightIn(min = Space.touch)) {
+                Text(if (refunded) "Lihat pengembalian" else "Catat refund penuh")
             }
         }
         item { TextButton(onHistory, Modifier.heightIn(min = Space.touch)) { Text("Lihat riwayat") } }
@@ -208,6 +216,7 @@ internal fun HistoryScreen(state: CashRead<List<SaleSnapshot>>, onRetry: () -> U
                         is QrisReceipt -> "QRIS dikonfirmasi manual"
                         null -> "QRIS menunggu pembayaran"
                     }
+                    if (sale.refundJournalId != null) Text("Sudah dikembalikan penuh")
                     val timestamp = sale.receipt?.paidAt ?: checkNotNull(sale.pending).startedAt
                     Text("$label · ${formatSaleTime(timestamp)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
