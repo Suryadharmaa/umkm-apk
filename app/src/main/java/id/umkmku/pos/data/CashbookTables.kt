@@ -33,6 +33,7 @@ data class JournalRecord(
     @Relation(parentColumn = "id", entityColumn = "journalId") val lines: List<JournalLineRow>,
     @Relation(parentColumn = "id", entityColumn = "journalId") val movement: FinancialMovementRow?,
     @Relation(parentColumn = "saleId", entityColumn = "saleId") val payment: PaymentRow?,
+    @Relation(parentColumn = "id", entityColumn = "journalId") val settlement: SettlementRow?,
 )
 
 @Dao
@@ -42,7 +43,8 @@ interface CashbookDao {
         SELECT journal.* FROM journal
         LEFT JOIN financial_movement ON financial_movement.journalId = journal.id
         LEFT JOIN payment ON payment.saleId = journal.saleId
-        ORDER BY COALESCE(financial_movement.effectiveAt, payment.paidAt) DESC,
+        LEFT JOIN settlement ON settlement.journalId = journal.id
+        ORDER BY COALESCE(financial_movement.effectiveAt, payment.paidAt, settlement.effectiveAt) DESC,
             CASE WHEN journal.kind = 'OPENING' THEN 1 ELSE 0 END, journal.id DESC
     """)
     fun observeLedger(): Flow<List<JournalRecord>>
@@ -54,10 +56,11 @@ interface CashbookDao {
     suspend fun opened(account: String): Boolean
 
     @Query("""
-        SELECT MIN(COALESCE(financial_movement.effectiveAt, payment.paidAt))
+        SELECT MIN(COALESCE(financial_movement.effectiveAt, payment.paidAt, settlement.effectiveAt))
         FROM journal_line JOIN journal ON journal.id = journal_line.journalId
         LEFT JOIN financial_movement ON financial_movement.journalId = journal.id
         LEFT JOIN payment ON payment.saleId = journal.saleId
+        LEFT JOIN settlement ON settlement.journalId = journal.id
         WHERE journal_line.account = :account AND journal.kind != 'OPENING'
     """)
     suspend fun earliestMovement(account: String): Long?

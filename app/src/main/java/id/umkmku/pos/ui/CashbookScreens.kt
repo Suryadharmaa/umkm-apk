@@ -76,6 +76,7 @@ internal fun CashbookScreen(
     onDate: (LocalDate) -> Unit,
     onNew: (LedgerAccount?) -> Unit,
     onHistory: () -> Unit,
+    onSettlement: (() -> Unit)? = null,
 ) {
     if (state !is CashRead.Ready) {
         CashbookStatus(state, onRetry)
@@ -90,7 +91,12 @@ internal fun CashbookScreen(
             Button(
                 { onNew(null) }, modifier = Modifier.fillMaxWidth().heightIn(min = Space.touch),
             ) { Text("Catat mutasi") }
-            TextButton(onHistory, Modifier.heightIn(min = Space.touch)) { Text("Riwayat mutasi") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onHistory, Modifier.heightIn(min = Space.touch)) { Text("Riwayat mutasi") }
+                if (onSettlement != null) {
+                    TextButton(onSettlement, Modifier.heightIn(min = Space.touch)) { Text("Pencairan QRIS") }
+                }
+            }
         }
         item { SectionTitle("Saldo tercatat saat ini") }
         items(book.accounts, key = { it.account.name }) { account ->
@@ -194,6 +200,11 @@ internal fun MovementDetails(entry: LedgerEntry, zone: ZoneId, onReceipt: (Strin
                 Text("Waktu pencatatan · ${formatTime(entry.recordedAt, zone)}")
                 if (entry.movement?.kind == MovementKind.OPENING) {
                     Text("Saldo sebelum mutasi sejak ${formatTime(entry.effectiveAt, zone)}")
+                }
+                entry.payout?.let { payout ->
+                    MoneyLine("Biaya aktual", rupiah(payout.fee))
+                    MoneyLine("Kredit bank", rupiah(payout.net))
+                    Text("Waktu pencairan · ${formatTime(payout.effectiveAt, zone)}")
                 }
                 entry.movement?.category?.let { Text("Kategori · ${it.label}") }
                 entry.movement?.note?.takeIf(String::isNotBlank)?.let { Text(it) }

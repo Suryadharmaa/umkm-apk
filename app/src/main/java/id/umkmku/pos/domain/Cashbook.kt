@@ -8,7 +8,8 @@ import java.time.ZoneId
 enum class LedgerAccount(val label: String) {
     CASH("Kas tunai"), BANK("Bank"), QRIS_CLEARING("QRIS belum cair"),
     SALES("Penjualan"), OTHER_INCOME("Pendapatan lain"),
-    OPERATING_EXPENSE("Beban operasional"), OWNER_EQUITY("Modal pemilik");
+    OPERATING_EXPENSE("Beban operasional"), OWNER_EQUITY("Modal pemilik"),
+    SETTLEMENT_FEE("Biaya pencairan QRIS");
 
     val isFunding: Boolean get() = this == CASH || this == BANK
     fun otherFunding(): LedgerAccount = when (this) {
@@ -58,9 +59,10 @@ data class LedgerEntry(
     val movement: Movement?,
     val saleId: String?,
     val lines: List<LedgerLine>,
+    val payout: PayoutPosting? = null,
 ) {
     fun amountFor(account: LedgerAccount): Long? = lines.firstOrNull { it.account == account }?.amount
-    val label: String get() = movement?.let {
+    val label: String get() = if (payout != null) "Pencairan QRIS" else movement?.let {
         if (it.kind == MovementKind.TRANSFER) "${it.account.label} → ${it.account.otherFunding().label}" else it.kind.label
     } ?: if (amountFor(LedgerAccount.QRIS_CLEARING) != null) "Penjualan QRIS" else "Penjualan tunai"
 }
@@ -108,6 +110,7 @@ enum class DailyTotal(val label: String) {
     OTHER_INCOME("Pendapatan lain"), EXPENSES("Beban operasional"),
     OWNER_IN("Setoran modal"), OWNER_OUT("Penarikan pemilik"),
     CASH_TO_BANK("Kas tunai → Bank"), BANK_TO_CASH("Bank → Kas tunai"),
+    QRIS_BANK_CREDIT("Kredit bank dari QRIS"), SETTLEMENT_FEES("Biaya pencairan QRIS"),
     CASH_CHANGE("Mutasi bersih kas tunai"), BANK_CHANGE("Mutasi bersih bank"),
 }
 
@@ -139,7 +142,12 @@ internal fun cashbook(entries: List<LedgerEntry>, date: LocalDate, zone: ZoneId)
         val time = Instant.ofEpochMilli(entry.effectiveAt)
         if (time < start || time >= end) continue
         hasActivity = true
-        totals.add(dailyKind(entry), entry.amount)
+        val payout = entry.payout
+        if (payout == null) totals.add(dailyKind(entry), entry.amount)
+        else {
+            totals.add(DailyTotal.QRIS_BANK_CREDIT, payout.net)
+            totals.add(DailyTotal.SETTLEMENT_FEES, payout.fee)
+        }
         totals.add(DailyTotal.CASH_CHANGE, entry.amountFor(LedgerAccount.CASH) ?: 0)
         totals.add(DailyTotal.BANK_CHANGE, entry.amountFor(LedgerAccount.BANK) ?: 0)
         movement?.category?.let { expenses.add(it, entry.amount) }

@@ -72,14 +72,15 @@ interface CatalogDao {
         ProductRow::class, CategoryRow::class, SaleRow::class, SaleLineRow::class,
         PaymentRow::class, JournalRow::class, JournalLineRow::class,
         QrisProfileRow::class, QrisOrderRow::class, QrisEvidenceRow::class,
-        FinancialMovementRow::class,
+        FinancialMovementRow::class, SettlementRow::class, SettlementPaymentRow::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5),
     ],
 )
 abstract class CatalogDatabase : RoomDatabase() {
@@ -87,4 +88,5 @@ abstract class CatalogDatabase : RoomDatabase() {
     abstract fun cashSaleDao(): CashSaleDao
     abstract fun qrisDao(): QrisDao
     abstract fun cashbookDao(): CashbookDao
+    abstract fun settlementDao(): SettlementDao
 }

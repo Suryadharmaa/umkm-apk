@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import id.umkmku.pos.feature.CashRead
 import id.umkmku.pos.feature.CashViewModel
 import id.umkmku.pos.feature.CashbookViewModel
+import id.umkmku.pos.feature.SettlementViewModel
 import id.umkmku.pos.domain.LedgerAccount
 import java.util.UUID
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -65,6 +66,8 @@ private const val QRIS = "qris/{id}"
 private const val QRIS_CONFIRM = "qris-confirm/{id}"
 private const val QRIS_PROFILE = "qris-profile"
 private const val RECEIPT = "receipt/{id}"
+private const val SETTLEMENTS = "settlements"
+private const val SETTLEMENT = "settlement/{id}"
 private const val FINANCE_ENTRY = "finance-entry/{id}?opening={opening}"
 private const val FINANCE_HISTORY = "finance-history"
 private const val FINANCE_DETAIL = "finance-detail/{id}"
@@ -72,7 +75,12 @@ private const val EDIT = "edit/{type}?id={id}"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookViewModel) {
+fun WarungApp(
+    model: CatalogViewModel,
+    cash: CashViewModel,
+    finance: CashbookViewModel,
+    settlements: SettlementViewModel,
+) {
     val state by model.catalog.collectAsStateWithLifecycle()
     val draftState by cash.draft.collectAsStateWithLifecycle()
     val command by cash.command.collectAsStateWithLifecycle()
@@ -80,6 +88,7 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookVie
     val quantities = draft?.lines.orEmpty().associate { it.product.id to it.quantity }
     val save by model.save.collectAsStateWithLifecycle()
     val financeSave by finance.save.collectAsStateWithLifecycle()
+    val settlementSave by settlements.save.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: Tab.HOME.route
@@ -115,6 +124,8 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookVie
                 FINANCE_ENTRY -> "Catat mutasi"
                 FINANCE_HISTORY -> "Riwayat mutasi"
                 FINANCE_DETAIL -> "Rincian mutasi"
+                SETTLEMENTS -> "Pencairan QRIS"
+                SETTLEMENT -> "Rincian pencairan"
                 EDIT -> if (entry?.arguments?.getString("type") == "product") "Produk" else "Kategori"
                 else -> tab?.title
             }
@@ -122,7 +133,7 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookVie
                 TopAppBar(
                     title = { Text(title) },
                     navigationIcon = {
-                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy) {
+                        if (tab == null) IconButton(onClick = { nav.popBackStack() }, enabled = !save.busy && !command.busy && !financeSave.busy && !settlementSave.busy) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                         }
                     },
@@ -218,6 +229,7 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookVie
                         nav.navigate(if (opening == null) "finance-entry/$id" else "finance-entry/$id?opening=${opening.name}")
                     },
                     onHistory = { nav.navigate(FINANCE_HISTORY) },
+                    onSettlement = { nav.navigate(SETTLEMENTS) },
                 )
             }
             composable(
@@ -238,6 +250,26 @@ fun WarungApp(model: CatalogViewModel, cash: CashViewModel, finance: CashbookVie
                         }
                     }
                 }
+            }
+            composable(SETTLEMENTS) {
+                val state by settlements.snapshot.collectAsStateWithLifecycle()
+                val snapshot = (state as? CashRead.Ready)?.value
+                if (snapshot == null) CashbookStatus(state, settlements::retryRead)
+                else SettlementHistory(
+                    snapshot.records,
+                    onNew = { settlements.clearError(); nav.navigate("settlement/${UUID.randomUUID()}") },
+                    onOpen = { settlements.clearError(); nav.navigate("settlement/$it") },
+                )
+            }
+            composable(SETTLEMENT) { routeEntry ->
+                BackHandler(enabled = settlementSave.busy) {}
+                val state by settlements.snapshot.collectAsStateWithLifecycle()
+                val snapshot = (state as? CashRead.Ready)?.value
+                val id = checkNotNull(routeEntry.arguments?.getString("id"))
+                if (snapshot == null) CashbookStatus(state, settlements::retryRead)
+                else SettlementEditor(
+                    id, snapshot.records.find { it.id == id }, snapshot.payments, settlements.zone, settlementSave,
+                ) { evidence, selected, post -> settlements.save(id, evidence, selected, post) }
             }
             composable(FINANCE_HISTORY) {
                 val book by finance.book.collectAsStateWithLifecycle()
