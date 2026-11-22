@@ -74,7 +74,7 @@ class QrisFlowTest {
         hideKeyboard()
         click("Catat konfirmasi manual", scroll = true)
         await("QRIS dikonfirmasi manual")
-        compose.onNodeWithText("QRIS belum cair").assertIsDisplayed()
+        compose.onNodeWithText("QRIS diterima").assertIsDisplayed()
         if (capture) screenshot("qris-konfirmasi-manual")
         click("Lihat riwayat")
 
