@@ -55,6 +55,8 @@ class CashbookViewModel @Inject constructor(
         defaultZone,
     ))
 
+    val exportFilter = reportFilter.asStateFlow()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val book = retry.flatMapLatest {
         combine(repository.observeLedger(), selected) { entries, date ->

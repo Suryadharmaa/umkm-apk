@@ -93,6 +93,9 @@ interface CashSaleDao {
     @Transaction @Query("SELECT * FROM sale WHERE id = :id")
     suspend fun sale(id: String): SaleRecord?
 
+    @Transaction @Query("SELECT * FROM sale WHERE id IN (:ids)")
+    suspend fun saleBatch(ids: List<String>): List<SaleRecord>
+
     @Transaction @Query("SELECT * FROM sale WHERE draftSlot = 1")
     suspend fun draft(): SaleRecord?
 

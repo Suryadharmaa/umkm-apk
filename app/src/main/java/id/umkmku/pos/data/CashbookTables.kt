@@ -56,6 +56,9 @@ interface CashbookDao {
     @Transaction @Query("SELECT * FROM journal WHERE id = :id")
     suspend fun ledgerEntry(id: String): JournalRecord?
 
+    @Transaction @Query("SELECT * FROM journal WHERE id IN (:ids)")
+    suspend fun ledgerBatch(ids: List<String>): List<JournalRecord>
+
     @Query("SELECT EXISTS(SELECT 1 FROM financial_movement WHERE openingAccount = :account)")
     suspend fun opened(account: String): Boolean
 
