@@ -1,6 +1,5 @@
 package id.umkmku.pos.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
@@ -24,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,8 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,62 +41,6 @@ import id.umkmku.pos.domain.cartLines
 import id.umkmku.pos.domain.cartTotal
 import id.umkmku.pos.domain.rupiah
 import id.umkmku.pos.feature.CatalogState
-
-@Composable
-fun Dashboard(state: CatalogState, onCashier: () -> Unit, onCatalog: () -> Unit, onRetry: () -> Unit) {
-    LazyColumn(Modifier.fillMaxSize().testTag("dashboard")) {
-        item {
-            Column(
-                Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(HeaderDeep, HeaderBlue)))
-                    .padding(horizontal = Space.page, vertical = Space.lg),
-                verticalArrangement = Arrangement.spacedBy(Space.sm),
-            ) {
-                Text("UMKM-KU", style = MaterialTheme.typography.labelLarge, color = HeaderSecondary)
-                Text("Beranda", style = MaterialTheme.typography.displaySmall, color = Color.White)
-                Text("Kelola produk dan siapkan pesanan warung.", color = HeaderSecondary)
-                Button(onClick = onCashier, colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = Color.White, contentColor = HeaderDeep,
-                ), modifier = Modifier.heightIn(min = Space.touch)) {
-                    Icon(Icons.Default.ShoppingCart, null)
-                    Text("Buka kasir", Modifier.padding(start = Space.sm))
-                }
-            }
-        }
-        item {
-            Column(Modifier.padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.md)) {
-                Text("Katalog warung", style = MaterialTheme.typography.titleLarge)
-                when (state) {
-                    is CatalogState.Ready -> if (state.catalog.products.isEmpty()) {
-                        MessagePanel("Belum ada produk", "Tambahkan produk agar bisa dipilih di kasir.", "Kelola katalog", onCatalog)
-                        if (state.catalog.categories.isNotEmpty()) {
-                            Text("${state.catalog.categories.size} kategori aktif", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else {
-                        Panel {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.page)) {
-                                CatalogCount(state.catalog.products.size, "Produk aktif", Modifier.weight(1f))
-                                CatalogCount(state.catalog.categories.size, "Kategori aktif", Modifier.weight(1f))
-                            }
-                            TextButton(onClick = onCatalog, modifier = Modifier.heightIn(min = Space.touch)) {
-                                Text("Kelola katalog")
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.padding(start = Space.sm))
-                            }
-                        }
-                    }
-                    else -> CatalogStatus(state, onRetry)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CatalogCount(count: Int, label: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(count.toString(), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
 
 @Composable
 fun Cashier(
